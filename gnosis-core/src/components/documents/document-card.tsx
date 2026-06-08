@@ -10,6 +10,13 @@ import { cn } from "@/lib/utils"
 import type { Document } from "@/types"
 
 const STATUS = {
+  pending: {
+    icon: Loader2,
+    label: "Pending",
+    color: "text-muted-foreground",
+    bg: "bg-muted",
+    spin: false,
+  },
   processing: {
     icon: Loader2,
     label: "Converting",
@@ -48,7 +55,7 @@ function formatDate(iso: string) {
 export function DocumentCard({ doc }: { doc: Document }) {
   const [confirming, setConfirming] = useState(false)
   const { mutate: deleteDoc, isPending } = useDeleteDocument()
-  const status = STATUS[doc.status]
+  const status = STATUS[doc.processing_status] ?? STATUS.pending
   const StatusIcon = status.icon
 
   return (
@@ -64,10 +71,10 @@ export function DocumentCard({ doc }: { doc: Document }) {
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{doc.title}</p>
+        <p className="truncate font-medium">{doc.file_name}</p>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>{formatBytes(doc.file_size_bytes)}</span>
-          {doc.token_count && <span>{doc.token_count.toLocaleString()} tokens</span>}
+          <span>{formatBytes(doc.total_bytes)}</span>
+          {doc.chunk_count && <span>{doc.chunk_count.toLocaleString()} chunks</span>}
           <span>{formatDate(doc.created_at)}</span>
         </div>
       </div>
@@ -78,7 +85,7 @@ export function DocumentCard({ doc }: { doc: Document }) {
           {status.label}
         </span>
 
-        {doc.status === "ready" && (
+        {doc.processing_status === "ready" && (
           <Link href={`/tests/new?docId=${doc.id}`}>
             <Button variant="outline" size="sm" className="gap-1.5 text-xs">
               <BookOpen className="size-3" /> New test

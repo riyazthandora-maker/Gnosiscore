@@ -94,12 +94,13 @@ export async function POST(request: Request) {
   // Generate questions via Claude
   let questions
   try {
-    questions = await generateQuestions({
-      documentId: document_id,
-      toughness,
-      totalQuestions: total_questions,
-      topicFilter: topic_filter,
-    })
+    ;({ questions } = await generateQuestions({
+      documentIds: [document_id],
+      difficulty: toughness as import("@/types").Difficulty,
+      questionCount: total_questions,
+      topic: (topic_filter as string[] | null)?.join(", ") ?? undefined,
+      supabase,
+    }))
   } catch (err) {
     // Roll back the attempt on AI failure
     await supabase.from("test_attempts").delete().eq("id", attempt.id)

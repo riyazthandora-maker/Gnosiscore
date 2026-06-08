@@ -8,7 +8,7 @@ export async function GET() {
 
   const { data: attempts, error } = await supabase
     .from("test_attempts")
-    .select("id, score_pct, time_taken_secs, total_answered, completed_at, started_at, status, config_snapshot")
+    .select("id, config_id, score_pct, time_taken_secs, total_answered, completed_at, started_at, status, config_snapshot")
     .eq("user_id", user.id)
     .order("started_at", { ascending: false })
     .limit(50)

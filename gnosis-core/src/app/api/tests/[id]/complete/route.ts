@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { sendTestCompletedEmail } from "@/lib/email/send-test-completed"
 import { NextResponse } from "next/server"
 
 interface ResponseInput {
@@ -66,6 +68,32 @@ export async function POST(
       time_taken_secs: timeTakenSecs,
     })
     .eq("id", attemptId)
+
+  // Send completion email to educator — fire-and-forget
+  const adminDb = createAdminClient()
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://gnosiscore.ai"
+
+  Promise.all([
+    adminDb.from("tests").select("title, creator_id").eq("id", attempt.test_id).single(),
+    adminDb.from("users").select("full_name, email").eq("id", user.id).single(),
+  ]).then(async ([testRes, studentRes]) => {
+    if (!testRes.data || !studentRes.data) return
+    const { data: educatorRes } = await adminDb
+      .from("users")
+      .select("email, full_name")
+      .eq("id", testRes.data.creator_id)
+      .single()
+    if (!educatorRes) return
+    return sendTestCompletedEmail({
+      educatorEmail: educatorRes.email,
+      educatorName: educatorRes.full_name ?? "Educator",
+      studentName: studentRes.data.full_name ?? studentRes.data.email ?? "A student",
+      testTitle: testRes.data.title,
+      scorePct,
+      timeTakenSecs,
+      resultsUrl: `${appUrl}/tests/${attempt.test_id}/analytics`,
+    })
+  }).catch((err) => console.error("[complete] email failed:", err?.message))
 
   return NextResponse.json({ attempt_id: attemptId, score_pct: scorePct })
 }

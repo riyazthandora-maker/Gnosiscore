@@ -1,154 +1,165 @@
 "use client"
 
-import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
-import { BookOpen, Clock, Trophy, Send } from "lucide-react"
+import { BookOpen, Plus, Clock, CheckCircle2, Users, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { InvitationPanel } from "@/components/quiz/invitation-panel"
 import { cn } from "@/lib/utils"
-import type { ConfigSnapshot, TestConfig } from "@/types"
+import type { Test, Question } from "@/types"
 
-interface AttemptRow {
-  id: string
-  score_pct: number | null
-  time_taken_secs: number | null
-  total_answered: number
-  completed_at: string | null
-  started_at: string
-  status: string
-  config_snapshot: ConfigSnapshot
-}
-
-function formatTime(secs: number) {
-  const m = Math.floor(secs / 60); const s = secs % 60
-  return m > 0 ? `${m}m ${s}s` : `${s}s`
-}
 function formatDate(iso: string) {
-  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso))
-}
-function scoreColor(pct: number) {
-  if (pct >= 80) return "text-green-600 dark:text-green-400"
-  if (pct >= 50) return "text-amber-600 dark:text-amber-400"
-  return "text-destructive"
+  return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(iso))
 }
 
-type Tab = "history" | "invitations"
+function StatusBadge({ published }: { published: boolean }) {
+  return (
+    <span className={cn(
+      "inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium",
+      published
+        ? "bg-green-500/10 text-green-600 dark:text-green-400"
+        : "bg-muted text-muted-foreground"
+    )}>
+      {published ? <><CheckCircle2 className="size-3" /> Published</> : "Draft"}
+    </span>
+  )
+}
 
 export default function TestsPage() {
-  const [tab, setTab] = useState<Tab>("history")
-
-  const { data: attemptsData, isLoading: attemptsLoading } = useQuery<{ attempts: AttemptRow[] }>({
-    queryKey: ["attempts"],
-    queryFn: () => fetch("/api/tests/attempts").then((r) => r.json()),
+  const { data: testsData, isLoading: testsLoading } = useQuery<{ tests: Test[] }>({
+    queryKey: ["educator-tests"],
+    queryFn: () => fetch("/api/educator/tests").then((r) => r.json()),
   })
 
-  const { data: configsData } = useQuery<{ configs: TestConfig[] }>({
-    queryKey: ["test-configs"],
-    queryFn: () => fetch("/api/tests/configs").then((r) => r.json()),
-    enabled: tab === "invitations",
+  const { data: bankData } = useQuery<{ questions: Question[]; total: number }>({
+    queryKey: ["question-bank-summary"],
+    queryFn: () => fetch("/api/educator/questions?summary=1").then((r) => r.json()),
   })
 
-  const attempts = attemptsData?.attempts ?? []
-  const configs = configsData?.configs ?? []
+  const tests = testsData?.tests ?? []
+  const bankTotal = bankData?.total ?? 0
+  const approvedCount = bankData?.questions?.length ?? 0
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Tests</h1>
-        <p className="text-muted-foreground">Your test history and invitations.</p>
+    <div className="space-y-8">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Tests</h1>
+          <p className="text-muted-foreground">Generate questions, review them, then build and assign tests.</p>
+        </div>
+        <Link href="/tests/generate">
+          <Button className="gap-2">
+            <Plus className="size-4" />
+            Generate questions
+          </Button>
+        </Link>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-1 rounded-xl border border-border bg-muted/30 p-1 w-fit">
-        {(["history", "invitations"] as Tab[]).map((t) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={cn(
-              "rounded-lg px-4 py-1.5 text-sm font-medium capitalize transition-colors",
-              tab === t ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            {t === "invitations" ? <span className="flex items-center gap-1.5"><Send className="size-3.5" />Invitations</span> : "History"}
-          </button>
+      {/* Question bank summary */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[
+          { label: "Approved questions", value: approvedCount, sub: "ready to use" },
+          { label: "Tests created", value: tests.length, sub: "total" },
+          { label: "Published tests", value: tests.filter((t) => t.is_published).length, sub: "visible to students" },
+        ].map(({ label, value, sub }) => (
+          <div key={label} className="rounded-xl border border-border bg-card p-5">
+            <p className="text-2xl font-bold">{value}</p>
+            <p className="text-sm font-medium">{label}</p>
+            <p className="text-xs text-muted-foreground">{sub}</p>
+          </div>
         ))}
       </div>
 
-      <AnimatePresence mode="wait">
-        {tab === "history" && (
-          <motion.div key="history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            {attemptsLoading ? (
-              <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />)}</div>
-            ) : !attempts.length ? (
-              <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-                <BookOpen className="size-10 text-muted-foreground/40" />
-                <p className="font-medium">No tests yet</p>
-                <p className="text-sm text-muted-foreground">Upload a document and click New test to begin.</p>
-                <Link href="/documents"><Button variant="outline" size="sm">Go to documents</Button></Link>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {attempts.map((a) => {
-                  const snap = a.config_snapshot
-                  const completed = a.status === "completed"
-                  return (
-                    <motion.div
-                      key={a.id}
-                      initial={{ opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 hover:border-primary/20 transition-colors"
-                    >
-                      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                        <BookOpen className="size-5 text-primary" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium">{snap.document_title}</p>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground mt-0.5">
-                          <span className="capitalize">{snap.toughness}</span>
-                          <span>{snap.total_questions}q</span>
-                          {a.time_taken_secs && (
-                            <span className="flex items-center gap-1"><Clock className="size-3" />{formatTime(a.time_taken_secs)}</span>
-                          )}
-                          <span>{formatDate(a.started_at)}</span>
-                        </div>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-3">
-                        {completed && a.score_pct != null && (
-                          <div className="text-right">
-                            <p className={cn("text-xl font-bold tabular-nums", scoreColor(a.score_pct))}>
-                              {Math.round(a.score_pct)}%
-                            </p>
-                            <p className="text-xs text-muted-foreground flex items-center gap-0.5 justify-end">
-                              <Trophy className="size-3" />{a.total_answered}/{snap.total_questions}
-                            </p>
-                          </div>
-                        )}
-                        {completed ? (
-                          <Link href={`/test/${a.id}/results`}>
-                            <Button variant="outline" size="sm" className="text-xs">Results</Button>
-                          </Link>
-                        ) : (
-                          <Link href={`/test/${a.id}`}>
-                            <Button size="sm" className="text-xs">Resume</Button>
-                          </Link>
-                        )}
-                      </div>
-                    </motion.div>
-                  )
-                })}
-              </div>
-            )}
-          </motion.div>
-        )}
+      {/* Tests list */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Your tests</h2>
+          {bankTotal > 0 && (
+            <Link href="/tests/builder">
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                <BookOpen className="size-3.5" /> Build new test
+              </Button>
+            </Link>
+          )}
+        </div>
 
-        {tab === "invitations" && (
-          <motion.div key="invitations" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-            <InvitationPanel configs={configs} />
-          </motion.div>
+        {testsLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
+            ))}
+          </div>
+        ) : tests.length === 0 ? (
+          <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
+            <BookOpen className="size-10 text-muted-foreground/40" />
+            <p className="font-medium">No tests yet</p>
+            <p className="text-sm text-muted-foreground">
+              Generate questions from your documents, review them, then build a test.
+            </p>
+            <Link href="/tests/generate">
+              <Button variant="outline" size="sm">Generate questions</Button>
+            </Link>
+          </div>
+        ) : (
+          <AnimatePresence>
+            <div className="space-y-3">
+              {tests.map((test) => (
+                <motion.div
+                  key={test.id}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 hover:border-primary/20 transition-colors"
+                >
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <BookOpen className="size-5 text-primary" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="truncate font-medium">{test.title}</p>
+                      <StatusBadge published={test.is_published} />
+                    </div>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
+                      <span>{test.question_ids.length} questions</span>
+                      {test.time_limit_min && (
+                        <span className="flex items-center gap-1">
+                          <Clock className="size-3" /> {test.time_limit_min} min
+                        </span>
+                      )}
+                      <span>Created {formatDate(test.created_at)}</span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Link href={`/tests/${test.id}/assign`}>
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                        <Users className="size-3" /> Assign
+                      </Button>
+                    </Link>
+                    <Link href={`/tests/${test.id}`}>
+                      <Button variant="ghost" size="sm" className="text-xs">Edit</Button>
+                    </Link>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </AnimatePresence>
         )}
-      </AnimatePresence>
+      </section>
+
+      {/* Pending questions review CTA */}
+      {bankTotal > approvedCount && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Loader2 className="size-5 text-amber-500 shrink-0" />
+            <div>
+              <p className="text-sm font-medium">{bankTotal - approvedCount} questions pending your review</p>
+              <p className="text-xs text-muted-foreground">Review and approve generated questions before adding them to tests.</p>
+            </div>
+          </div>
+          <Link href="/tests/review">
+            <Button size="sm" variant="outline" className="shrink-0">Review now</Button>
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

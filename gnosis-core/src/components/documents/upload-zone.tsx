@@ -63,38 +63,48 @@ export function UploadZone() {
 
     const { token, storagePath } = await presignRes.json()
 
-    // 2. Upload directly to Supabase Storage
-    setState((s) => s.phase === "uploading" ? { ...s, progress: 10 } : s)
+    // 2. Upload directly to Supabase Storage.
+    // The SDK adds the required apikey/authorization headers that a raw XHR would miss.
+    // Drive a fake smooth progress with setInterval while the SDK awaits.
+    setState((s) => s.phase === "uploading" ? { ...s, progress: 5 } : s)
+
+    const uploadStart = Date.now()
+    // Estimate: ~2 MB/s on a typical connection; clamp to 75% until upload confirms
+    const estimatedMs = Math.max((file.size / (2 * 1024 * 1024)) * 1000, 3000)
+    const timer = setInterval(() => {
+      setState((s) => {
+        if (s.phase !== "uploading") return s
+        const pct = Math.min(5 + Math.round(((Date.now() - uploadStart) / estimatedMs) * 70), 75)
+        return { ...s, progress: pct }
+      })
+    }, 300)
 
     const supabase = createClient()
     const { error: uploadErr } = await supabase.storage
       .from("documents")
-      .uploadToSignedUrl(storagePath, token, file, {
-        contentType: file.type,
-        upsert: false,
-      })
+      .uploadToSignedUrl(storagePath, token, file, { contentType: file.type, upsert: false })
+
+    clearInterval(timer)
 
     if (uploadErr) {
       setState({ phase: "error", message: uploadErr.message })
       return
     }
 
-    setState((s) => s.phase === "uploading" ? { ...s, progress: 80 } : s)
+    setState((s) => s.phase === "uploading" ? { ...s, progress: 82 } : s)
 
     // 3. Create DB record + trigger pipeline
     const docRes = await fetch("/api/documents", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: file.name.replace(/\.[^.]+$/, ""),
-        storagePath,
-        fileSizeBytes: file.size,
-      }),
+      body: JSON.stringify({ fileName: file.name, storagePath, totalBytes: file.size }),
     })
 
     if (!docRes.ok) {
-      const { error } = await docRes.json()
-      setState({ phase: "error", message: error })
+      const msg = await docRes.json()
+        .then((j) => j?.error ?? `Server error ${docRes.status}`)
+        .catch(() => `Server error ${docRes.status}`)
+      setState({ phase: "error", message: msg })
       return
     }
 
@@ -144,7 +154,7 @@ export function UploadZone() {
               </div>
               <div>
                 <p className="font-medium">Drop your file here, or <span className="text-primary">browse</span></p>
-                <p className="mt-1 text-sm text-muted-foreground">PDF, PNG, JPG, WebP · up to 2 MB (Basic) / 10 MB (Pro)</p>
+                <p className="mt-1 text-sm text-muted-foreground">PDF, PNG, JPG, WebP · max 4 MB per file</p>
               </div>
             </motion.div>
           )}

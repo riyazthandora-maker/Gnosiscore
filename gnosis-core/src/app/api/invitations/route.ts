@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { sendInvitationEmail } from "@/lib/email/send-invitation"
 import { NextResponse } from "next/server"
 
 export async function GET() {
@@ -27,13 +28,20 @@ export async function POST(request: Request) {
 
   if (!invitee_email?.trim()) return NextResponse.json({ error: "Email is required." }, { status: 400 })
 
-  // Verify config belongs to user
-  const { data: config } = await supabase
-    .from("test_configs")
-    .select("id, documents(title)")
-    .eq("id", config_id)
-    .eq("user_id", user.id)
-    .single()
+  // Fetch config + inviter profile in parallel
+  const [{ data: config }, { data: inviterProfile }] = await Promise.all([
+    supabase
+      .from("test_configs")
+      .select("id, toughness, total_questions, total_time_secs, documents(title)")
+      .eq("id", config_id)
+      .eq("user_id", user.id)
+      .single(),
+    supabase
+      .from("users")
+      .select("display_name, email")
+      .eq("id", user.id)
+      .single(),
+  ])
 
   if (!config) return NextResponse.json({ error: "Test configuration not found." }, { status: 404 })
 
@@ -57,6 +65,25 @@ export async function POST(request: Request) {
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
   const inviteUrl = `${baseUrl}/invite/${token}`
+
+  // Send email (non-blocking — invitation is already saved if email fails)
+  if (process.env.RESEND_API_KEY) {
+    const doc = config.documents as unknown as { title: string } | null
+    const inviterName = inviterProfile?.display_name ?? inviterProfile?.email ?? "Someone"
+
+    sendInvitationEmail({
+      inviteeEmail: invitee_email.trim().toLowerCase(),
+      inviterName,
+      documentTitle: doc?.title ?? "a document",
+      toughness: config.toughness,
+      totalQuestions: config.total_questions,
+      totalTimeSecs: config.total_time_secs,
+      inviteUrl,
+      expiresAt,
+    }).catch((err) => {
+      console.error("[email] Failed to send invitation email:", err.message)
+    })
+  }
 
   return NextResponse.json({ invitation, inviteUrl }, { status: 201 })
 }

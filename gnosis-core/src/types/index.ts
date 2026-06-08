@@ -1,100 +1,134 @@
-export type Tier = "basic" | "pro"
-export type DocumentStatus = "processing" | "ready" | "failed"
-export type Toughness = "easy" | "medium" | "hard" | "advanced"
-export type ShowAnswerMode = "immediate" | "end" | "hidden"
-export type AttemptStatus = "in_progress" | "completed" | "abandoned"
-export type InvitationStatus = "pending" | "accepted" | "completed" | "expired"
+export type UserRole = 'admin' | 'educator_parent' | 'student'
+export type AccountStatus = 'pending' | 'approved' | 'rejected'
+export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'failed'
+export type GenerationStatus = 'pending_admin' | 'approved' | 'rejected' | 'completed'
+export type QuestionStatus = 'pending_review' | 'approved' | 'rejected'
+export type Difficulty = 'easy' | 'medium' | 'hard'
 
 export interface User {
   id: string
   email: string
-  display_name: string | null
-  avatar_url: string | null
-  tier: Tier
-  whatsapp_verified: boolean
-  whatsapp_number: string | null
-  storage_used_bytes: number
+  full_name: string
+  whatsapp: string
+  role: UserRole
+  account_status: AccountStatus
+  approved_by: string | null
+  approved_at: string | null
   created_at: string
+}
+
+export interface EducatorStudent {
+  id: string
+  educator_id: string
+  student_id: string
+  linked_at: string
 }
 
 export interface Document {
   id: string
-  user_id: string
-  title: string
-  original_path: string
+  owner_id: string
+  file_name: string
+  storage_path: string
   markdown_path: string | null
-  file_size_bytes: number
-  status: DocumentStatus
-  page_count: number | null
+  processing_status: DocumentStatus
+  chunk_count: number | null
+  total_bytes: number
+  created_at: string
+}
+
+export interface DocumentChunk {
+  id: string
+  document_id: string
+  chunk_index: number
+  content: string
   token_count: number | null
   created_at: string
 }
 
-export interface TestConfig {
-  id: string
-  user_id: string
-  document_id: string
-  name: string | null
-  toughness: Toughness
-  total_questions: number
-  total_time_secs: number | null
-  per_question_secs: number | null
-  show_answer_mode: ShowAnswerMode
-  topic_filter: string[] | null
-  created_at: string
-  document?: Document
-}
-
-export interface ConfigSnapshot {
-  toughness: Toughness
-  total_questions: number
-  total_time_secs: number | null
-  per_question_secs: number | null
-  show_answer_mode: ShowAnswerMode
-  topic_filter: string[] | null
-  document_title: string
-}
-
-export interface TestAttempt {
-  id: string
-  config_id: string
-  user_id: string
-  started_at: string
-  completed_at: string | null
-  score_pct: number | null
-  total_answered: number
-  time_taken_secs: number | null
-  config_snapshot: ConfigSnapshot
-  status: AttemptStatus
-}
-
 export interface QuestionOption {
-  label: "A" | "B" | "C" | "D"
+  label: 'A' | 'B' | 'C' | 'D'
   text: string
+  is_correct: boolean
 }
 
 export interface Question {
   id: string
-  attempt_id: string
-  seq_number: number
-  body: string
+  owner_id: string
+  generation_request_id: string | null
+  document_id: string | null
+  chunk_ids: string[]
+  question_text: string
   options: QuestionOption[]
-  correct_option: "A" | "B" | "C" | "D"
   explanation: string | null
-  topic_tag: string | null
-  difficulty: Toughness | null
+  difficulty: Difficulty | null
+  topic_tags: string[]
+  status: QuestionStatus
+  reviewed_at: string | null
+  created_at: string
 }
 
-export interface Response {
+export interface GenerationConfig {
+  difficulty: Difficulty
+  topic: string
+  question_type: 'mcq' | 'true_false'
+}
+
+export interface GenerationRequest {
   id: string
-  attempt_id: string
-  question_id: string
-  selected_option: "A" | "B" | "C" | "D" | null
-  is_correct: boolean | null
-  time_spent_secs: number | null
-  answered_at: string
+  requested_by: string
+  document_ids: string[]
+  prompt_context: string | null
+  question_count: number
+  config: GenerationConfig
+  status: GenerationStatus
+  reviewed_by: string | null
+  reviewed_at: string | null
+  admin_note: string | null
+  created_at: string
 }
 
+export interface Test {
+  id: string
+  creator_id: string
+  title: string
+  description: string | null
+  question_ids: string[]
+  time_limit_min: number | null
+  is_published: boolean
+  created_at: string
+}
+
+export interface TestAssignment {
+  id: string
+  test_id: string
+  student_id: string
+  assigned_by: string
+  due_at: string | null
+  assigned_at: string
+}
+
+export interface TestAttempt {
+  id: string
+  test_id: string
+  student_id: string
+  answers: Record<string, number>
+  score: number | null
+  max_score: number | null
+  config_snapshot: Record<string, unknown>
+  started_at: string
+  completed_at: string | null
+}
+
+export interface Notification {
+  id: string
+  user_id: string
+  type: string
+  payload: Record<string, unknown>
+  read_at: string | null
+  created_at: string
+}
+
+// Analytics types (Phase 6)
 export interface TopicStrength {
   topic: string
   confidence_pct: number
@@ -116,25 +150,24 @@ export interface DiagnosticReport {
   raw_narrative: string | null
 }
 
-export interface DashboardShare {
-  id: string
-  owner_id: string
-  viewer_id: string
-  granted_at: string
-}
+// Legacy aliases — Phase 4-5 components will be rewritten to use new types
+export type Toughness = Difficulty | 'advanced'
+export type ShowAnswerMode = 'immediate' | 'end' | 'hidden'
+export type ConfigSnapshot = Record<string, unknown>
+export type TestConfig = Record<string, unknown>
 
-export interface TestInvitation {
-  id: string
-  config_id: string
-  inviter_id: string
-  invitee_email: string
-  token: string
-  status: InvitationStatus
-  expires_at: string
-  created_at: string
-}
+export const FILE_LIMITS = {
+  perFile: 4 * 1024 * 1024,        // 4 MB
+  perTransaction: 20 * 1024 * 1024, // 20 MB
+} as const
 
-export const STORAGE_LIMITS: Record<Tier, { perUpload: number; total: number }> = {
-  basic: { perUpload: 2 * 1024 * 1024, total: 20 * 1024 * 1024 },
-  pro: { perUpload: 10 * 1024 * 1024, total: 100 * 1024 * 1024 },
+export const GENERATION_ADMIN_THRESHOLD = 20
+export const RAG_SIMILARITY_THRESHOLD = 0.50
+
+export function roleHomePath(role: UserRole): string {
+  switch (role) {
+    case 'admin':           return '/admin'
+    case 'educator_parent': return '/dashboard'
+    case 'student':         return '/student'
+  }
 }

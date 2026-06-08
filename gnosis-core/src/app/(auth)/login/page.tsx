@@ -13,7 +13,7 @@ export default function LoginPage() {
             GnosisCore
           </Link>
           <h1 className="mt-4 text-xl font-semibold">Welcome back</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in to continue learning</p>
+          <p className="mt-1 text-sm text-muted-foreground">We&apos;ll send a one-time code to your email</p>
         </div>
         <LoginForm />
         <p className="text-center text-sm text-muted-foreground">

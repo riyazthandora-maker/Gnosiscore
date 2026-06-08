@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { STORAGE_LIMITS } from "@/types"
+import { FILE_LIMITS } from "@/types"
 
 const ACCEPTED_MIME = ["application/pdf", "image/png", "image/jpeg", "image/webp"]
 
@@ -16,32 +16,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Only PDF and images are accepted." }, { status: 400 })
   }
 
-  // Load user profile for tier + current usage
-  const { data: profile, error: profileErr } = await supabase
-    .from("users")
-    .select("tier, storage_used_bytes")
-    .eq("id", user.id)
-    .single()
-
-  if (profileErr || !profile) {
-    return NextResponse.json({ error: "Profile not found." }, { status: 404 })
-  }
-
-  const limits = STORAGE_LIMITS[profile.tier as keyof typeof STORAGE_LIMITS]
-
-  if (size > limits.perUpload) {
-    const mb = limits.perUpload / 1024 / 1024
+  if (size > FILE_LIMITS.perFile) {
+    const mb = FILE_LIMITS.perFile / 1024 / 1024
     return NextResponse.json(
-      { error: `File exceeds the ${mb} MB per-upload limit for your plan.` },
-      { status: 413 }
-    )
-  }
-
-  if (profile.storage_used_bytes + size > limits.total) {
-    const used = (profile.storage_used_bytes / 1024 / 1024).toFixed(1)
-    const total = limits.total / 1024 / 1024
-    return NextResponse.json(
-      { error: `Storage full (${used} MB / ${total} MB used). Upgrade to Pro for more.` },
+      { error: `File exceeds the ${mb} MB per-file limit.` },
       { status: 413 }
     )
   }

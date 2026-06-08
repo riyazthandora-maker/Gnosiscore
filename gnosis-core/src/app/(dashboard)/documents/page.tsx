@@ -1,7 +1,6 @@
 import type { Metadata } from "next"
 import { UploadZone } from "@/components/documents/upload-zone"
 import { DocumentsList } from "@/components/documents/documents-list"
-import { StorageUsage } from "@/components/documents/storage-usage"
 
 export const metadata: Metadata = { title: "Documents" }
 
@@ -18,15 +17,15 @@ export default function DocumentsPage() {
           <UploadZone />
           <DocumentsList />
         </div>
-        <aside className="space-y-4">
-          <StorageUsage />
+        <aside>
           <div className="rounded-xl border border-border bg-card p-4 text-sm text-muted-foreground space-y-2">
             <p className="font-medium text-foreground">How it works</p>
             <ol className="list-decimal list-inside space-y-1 text-xs leading-relaxed">
-              <li>Upload a PDF or image</li>
+              <li>Upload a PDF or image (max 4 MB)</li>
               <li>We convert it to optimized Markdown</li>
-              <li>Click <span className="font-medium text-foreground">New test</span> to generate questions</li>
+              <li>Generate questions from the processed content</li>
             </ol>
+            <p className="text-xs">Max 20 MB per upload session.</p>
           </div>
         </aside>
       </div>

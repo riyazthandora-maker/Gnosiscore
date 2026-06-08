@@ -13,7 +13,7 @@ export default function RegisterPage() {
             GnosisCore
           </Link>
           <h1 className="mt-4 text-xl font-semibold">Create your account</h1>
-          <p className="mt-1 text-sm text-muted-foreground">Start mastering any subject for free</p>
+          <p className="mt-1 text-sm text-muted-foreground">Join as a student or educator/parent</p>
         </div>
         <RegisterForm />
         <p className="text-center text-sm text-muted-foreground">

@@ -1,17 +1,13 @@
 "use client"
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { createClient } from "@/lib/supabase/client"
 import type { Document } from "@/types"
 
 async function fetchDocuments(): Promise<Document[]> {
-  const supabase = createClient()
-  const { data, error } = await supabase
-    .from("documents")
-    .select("*")
-    .order("created_at", { ascending: false })
-  if (error) throw error
-  return data
+  const res = await fetch("/api/documents")
+  if (!res.ok) throw new Error("Failed to fetch documents")
+  const json = await res.json()
+  return json.documents ?? []
 }
 
 export function useDocuments() {
@@ -21,7 +17,7 @@ export function useDocuments() {
     // poll while any document is still processing
     refetchInterval: (query) => {
       const docs = query.state.data as Document[] | undefined
-      return docs?.some((d) => d.status === "processing") ? 3000 : false
+      return docs?.some((d) => d.processing_status === "processing") ? 3000 : false
     },
   })
   return { documents, ...rest }

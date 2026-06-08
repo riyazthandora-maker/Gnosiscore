@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<title>GnosisCore User Guide</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @page {
+    size: A4 landscape;
+    margin: 0;
+  }
+
+  body {
+    width: 297mm;
+    height: 210mm;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #fff;
+    overflow: hidden;
+    color: #1a1a2e;
+  }
+
+  /* ── Header ─────────────────────────────────── */
+  header {
+    background: linear-gradient(135deg, #7c3aed, #6d28d9);
+    padding: 12px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  header .brand { display: flex; align-items: center; gap: 10px; }
+  header .brand-name { font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -0.5px; }
+  header .brand-sub { font-size: 10px; color: rgba(255,255,255,.75); font-weight: 400; margin-top: 1px; }
+  header .guide-label {
+    font-size: 10px; font-weight: 600; color: rgba(255,255,255,.85);
+    background: rgba(255,255,255,.15); padding: 4px 10px; border-radius: 20px; letter-spacing: .5px;
+  }
+
+  /* ── Two column layout ───────────────────────── */
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    height: calc(210mm - 50px);
+  }
+
+  .col {
+    padding: 16px 22px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .col-teacher { border-right: 1.5px solid #f0ebff; background: #fdfcff; }
+  .col-student  { background: #ffffff; }
+
+  .col-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #ede9fe;
+    margin-bottom: 4px;
+  }
+  .col-title .icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+  .col-teacher .col-title .icon { background: #7c3aed; }
+  .col-student  .col-title .icon { background: #059669; }
+  .col-title h2 { font-size: 14px; font-weight: 700; color: #1a1a2e; }
+  .col-title .role-badge {
+    font-size: 9px; font-weight: 600; padding: 2px 8px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: .6px;
+  }
+  .col-teacher .role-badge { background: #ede9fe; color: #7c3aed; }
+  .col-student  .role-badge { background: #d1fae5; color: #059669; }
+
+  /* ── Steps ───────────────────────────────────── */
+  .steps { display: flex; flex-direction: column; gap: 5px; }
+
+  .step {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: #fff;
+    border: 1px solid #f0ebff;
+    border-radius: 9px;
+    padding: 7px 10px;
+  }
+  .col-student .step { border-color: #d1fae5; }
+
+  .step-num {
+    width: 20px; height: 20px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; flex-shrink: 0; margin-top: 1px;
+  }
+  .col-teacher .step-num { background: #7c3aed; color: #fff; }
+  .col-student  .step-num { background: #059669; color: #fff; }
+
+  .step-body { flex: 1; }
+  .step-title { font-size: 11px; font-weight: 700; color: #1a1a2e; line-height: 1.3; }
+  .step-desc  { font-size: 9.5px; color: #666; margin-top: 2px; line-height: 1.4; }
+  .step-desc strong { color: #1a1a2e; }
+
+  .tag {
+    display: inline-block; font-size: 8.5px; font-weight: 600;
+    padding: 1.5px 6px; border-radius: 4px; margin-top: 3px;
+  }
+  .tag-purple { background: #ede9fe; color: #7c3aed; }
+  .tag-green  { background: #d1fae5; color: #059669; }
+  .tag-amber  { background: #fef3c7; color: #b45309; }
+
+  /* ── Footer ──────────────────────────────────── */
+  footer {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: #f9f7ff;
+    border-top: 1px solid #ede9fe;
+    padding: 5px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  footer .url { font-size: 9px; font-weight: 700; color: #7c3aed; }
+  footer .note { font-size: 9px; color: #999; }
+  footer .support { font-size: 9px; color: #666; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" rx="8" fill="rgba(255,255,255,.2)"/>
+      <path d="M7 14c0-3.866 3.134-7 7-7s7 3.134 7 7" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="14" cy="17" r="3" fill="#fff"/>
+      <path d="M11 20h6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <div class="brand-name">GnosisCore</div>
+      <div class="brand-sub">AI-Powered Practice Tests</div>
+    </div>
+  </div>
+  <div class="guide-label">QUICK START GUIDE</div>
+</header>
+
+<div class="columns">
+
+  <!-- ── TEACHER COLUMN ──────────────────────── -->
+  <div class="col col-teacher">
+    <div class="col-title">
+      <div class="icon">🎓</div>
+      <h2>Teacher / Parent</h2>
+      <span class="role-badge">Educator</span>
+    </div>
+
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Register &amp; wait for approval</div>
+          <div class="step-desc">Go to <strong>gnosiscore.org/register</strong>, choose <strong>Teacher / Parent</strong>, fill in your details. Admin will approve your account — you'll receive an email once approved.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Upload your study materials</div>
+          <div class="step-desc">From the <strong>Documents</strong> page, upload PDFs or images (max <strong>4 MB</strong> each). The system converts them to searchable text automatically. Wait for status to show <strong>Ready</strong>.</div>
+          <span class="tag tag-amber">PDF &amp; images supported</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Generate questions</div>
+          <div class="step-desc">Go to <strong>Generate</strong>, select your documents, enter a topic, choose difficulty (Easy / Medium / Hard) and number of questions. Questions are generated strictly from your uploaded content — no hallucinations.</div>
+          <span class="tag tag-amber">≤20 questions: instant &nbsp;·&nbsp; >20: needs admin approval</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">Review &amp; approve questions</div>
+          <div class="step-desc">All generated questions land in <strong>Review</strong>. Read each question, edit if needed, then click <strong>Approve</strong> or <strong>Reject</strong>. Only approved questions enter your question bank.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="step-title">Build a test</div>
+          <div class="step-desc">Go to <strong>Test Builder</strong>, pick questions from your bank, set a title and configure options. Save as draft or publish immediately.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <div class="step-title">Assign to students</div>
+          <div class="step-desc">Open the test, click <strong>Assign</strong>, enter student email addresses (one per line), optionally set a due date. Students receive an email with a direct link.</div>
+          <span class="tag tag-purple">Email notification sent automatically</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">7</div>
+        <div class="step-body">
+          <div class="step-title">Track performance</div>
+          <div class="step-desc">View per-test and per-student analytics from the <strong>Analytics</strong> page. Export results as CSV anytime.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── STUDENT COLUMN ──────────────────────── -->
+  <div class="col col-student">
+    <div class="col-title">
+      <div class="icon">📚</div>
+      <h2>Student</h2>
+      <span class="role-badge">Student</span>
+    </div>
+
+    <div class="steps">
+
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Register your account</div>
+          <div class="step-desc">Go to <strong>gnosiscore.org/register</strong>, choose <strong>Student</strong>, enter your name, email and a password. Your account is activated immediately — no waiting for approval.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Log in</div>
+          <div class="step-desc">Go to <strong>gnosiscore.org/login</strong>. Enter your email and click <strong>Send OTP</strong> — a 6-digit code is emailed to you. Enter it to sign in. Alternatively use your password.</div>
+          <span class="tag tag-green">Check spam if code doesn't arrive</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Open an assigned test</div>
+          <div class="step-desc">When a teacher assigns you a test, you'll receive an email with a <strong>Take Test</strong> button. Click it — or find the test in your <strong>Student Dashboard</strong> under <em>Assigned Tests</em>.</div>
+          <span class="tag tag-green">Email includes the due date</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">Answer the questions</div>
+          <div class="step-desc">Read each question and click the option you think is correct (A, B, C or D). Use the <strong>Previous / Next</strong> buttons to navigate. You can change any answer before submitting.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="step-title">Submit &amp; see your score</div>
+          <div class="step-desc">Click <strong>Submit Test</strong> when done. Your score appears immediately along with correct answers and explanations for every question — great for learning from mistakes.</div>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <div class="step-title">Review past tests</div>
+          <div class="step-desc">All completed tests and scores are saved in your dashboard. You can revisit any result at any time to study the explanations again.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="url">gnosiscore.org</div>
+  <div class="note">All questions are generated strictly from teacher-uploaded materials · No hallucinations · Powered by Google Gemini</div>
+  <div class="support">Support: noreply@gnosiscore.org</div>
+</footer>
+
+</body>
+</html>

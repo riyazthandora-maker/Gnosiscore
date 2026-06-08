@@ -60,12 +60,13 @@ export async function POST(
 
   let questions
   try {
-    questions = await generateQuestions({
-      documentId: cfg.document_id,
-      toughness: cfg.toughness,
-      totalQuestions: cfg.total_questions,
-      topicFilter: cfg.topic_filter,
-    })
+    ;({ questions } = await generateQuestions({
+      documentIds: [cfg.document_id as string],
+      difficulty: (cfg.toughness as import("@/types").Difficulty) ?? "medium",
+      questionCount: (cfg.total_questions as number) ?? 10,
+      topic: (cfg.topic_filter as string[] | null)?.join(", ") ?? undefined,
+      supabase,
+    }))
   } catch (err) {
     await supabase.from("test_attempts").delete().eq("id", attempt.id)
     return NextResponse.json({ error: err instanceof Error ? err.message : "Generation failed." }, { status: 502 })

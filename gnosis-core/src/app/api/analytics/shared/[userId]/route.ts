@@ -61,8 +61,8 @@ export async function GET(
     return {
       date: new Date(a.completed_at!).toLocaleDateString("en", { month: "short", day: "numeric" }),
       score: Math.round(a.score_pct ?? 0),
-      toughness: snap.toughness,
-      docTitle: snap.document_title,
+      toughness: snap.toughness as string,
+      docTitle: snap.document_title as string,
       attemptId: a.id,
     }
   })
