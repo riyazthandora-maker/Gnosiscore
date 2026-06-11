@@ -16,6 +16,7 @@ const MIN_TEXT     = 200
 
 const docId = process.argv[2]
 if (!docId) { console.error("Usage: node process-doc.mjs <document-id>"); process.exit(1) }
+if (!SERVICE_KEY || !GEMINI_KEY) { console.error("Missing env vars: SUPABASE_SERVICE_ROLE_KEY, GOOGLE_AI_API_KEY"); process.exit(1) }
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
 const genAI = new GoogleGenerativeAI(GEMINI_KEY)
