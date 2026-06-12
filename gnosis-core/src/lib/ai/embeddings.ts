@@ -53,25 +53,24 @@ export async function embedAndStore(
 ): Promise<number> {
   if (chunks.length === 0) return 0
 
-  const embeddingModel = genAI.getGenerativeModel({ model: "gemini-embedding-001" })
   let insertedCount = 0
 
   for (let i = 0; i < chunks.length; i++) {
     const content = chunks[i]
 
     const result = await withRetry(() =>
-      embeddingModel.embedContent({
-        content: { parts: [{ text: content }], role: "user" },
-        taskType: "RETRIEVAL_DOCUMENT" as never,
-        outputDimensionality: 768,
-      } as never)
+      genAI.models.embedContent({
+        model: "gemini-embedding-001",
+        contents: content,
+        config: { taskType: "RETRIEVAL_DOCUMENT", outputDimensionality: 768 },
+      })
     )
 
     const { error } = await supabase.from("document_chunks").insert({
       document_id: documentId,
       chunk_index: i,
       content,
-      embedding: result.embedding.values,
+      embedding: result.embeddings?.[0]?.values ?? [],
       token_count: Math.ceil(content.length / 4),
     })
     if (error) throw new Error(`Failed to store chunk ${i}: ${error.message}`)

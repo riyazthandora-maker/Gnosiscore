@@ -35,31 +35,27 @@ export async function generateDiagnostic(
     })),
   }
 
-  const model = genAI.getGenerativeModel({
-    model: DIAGNOSTIC_MODEL,
-    systemInstruction: `You are an educational performance analyst. Output ONLY valid JSON matching this schema:
+  const result = await withRetry(() =>
+    genAI.models.generateContent({
+      model: DIAGNOSTIC_MODEL,
+      contents: `Analyse this student's performance and generate their diagnostic report:\n\n${JSON.stringify(performanceSummary, null, 2)}`,
+      config: {
+        systemInstruction: `You are an educational performance analyst. Output ONLY valid JSON matching this schema:
 ${JSON_SCHEMA}
 Rules:
 - strengths: up to 3 topics where accuracy_pct >= 70 and questions_seen >= 3, sorted best first
 - weaknesses: up to 3 topics where accuracy_pct < 60 and questions_seen >= 2, worst first
 - Each weakness suggestion: one specific, actionable study tip
 - raw_narrative: 2-3 sentences, address the student directly, encouraging tone, highlight one strength and one priority`,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    generationConfig: {
-      responseMimeType: "application/json",
-      maxOutputTokens: 2048,
-      temperature: 0.5,
-      thinkingConfig: { thinkingBudget: 0 },
-    } as any,
-  })
-
-  const result = await withRetry(() =>
-    model.generateContent(
-      `Analyse this student's performance and generate their diagnostic report:\n\n${JSON.stringify(performanceSummary, null, 2)}`
-    )
+        responseMimeType: "application/json",
+        maxOutputTokens: 2048,
+        temperature: 0.5,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    })
   )
 
-  const text = result.response.text()
+  const text = result.text ?? ""
   try {
     return JSON.parse(text) as DiagnosticOutput
   } catch {

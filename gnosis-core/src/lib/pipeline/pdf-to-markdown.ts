@@ -1,4 +1,4 @@
-import { withRetry } from "@/lib/ai/gemini"
+import { genAI, withRetry } from "@/lib/ai/gemini"
 
 const PAGE_NUMBER_RE = /^\s*[-–]?\s*\d{1,4}\s*[-–]?\s*$|^\s*page\s+\d+(\s+of\s+\d+)?\s*$/gim
 const SEPARATOR_RE = /^[\s*\-_=~]{3,}\s*$/gm
@@ -42,25 +42,22 @@ function promoteHeadings(text: string): string {
 }
 
 async function geminiOcr(buffer: Buffer, title: string, mimeType: string): Promise<string> {
-  const { GoogleGenerativeAI } = await import("@google/generative-ai")
-  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!)
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
   const b64 = buffer.toString("base64")
-
   const result = await withRetry(() =>
-    model.generateContent([
-      {
-        inlineData: {
-          mimeType: mimeType as "application/pdf" | "image/png" | "image/jpeg" | "image/webp",
-          data: b64,
+    genAI.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { inlineData: { mimeType, data: b64 } },
+            { text: "Extract all text from this document exactly as written. Preserve headings and paragraph structure. Output plain text only — no commentary." },
+          ],
         },
-      },
-      {
-        text: "Extract all text from this document exactly as written. Preserve headings and paragraph structure. Output plain text only — no commentary.",
-      },
-    ])
+      ],
+    })
   )
-  return result.response.text().trim()
+  return (result.text ?? "").trim()
 }
 
 export async function pdfToMarkdown(

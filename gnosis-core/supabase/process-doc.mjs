@@ -4,7 +4,7 @@
  */
 import { createClient } from "@supabase/supabase-js"
 import { createRequire } from "module"
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { GoogleGenAI } from "@google/genai"
 
 const req = createRequire(import.meta.url)
 const pdfParse = req("pdf-parse")
@@ -19,7 +19,7 @@ if (!docId) { console.error("Usage: node process-doc.mjs <document-id>"); proces
 if (!SERVICE_KEY || !GEMINI_KEY) { console.error("Missing env vars: SUPABASE_SERVICE_ROLE_KEY, GOOGLE_AI_API_KEY"); process.exit(1) }
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY)
-const genAI = new GoogleGenerativeAI(GEMINI_KEY)
+const ai = new GoogleGenAI({ apiKey: GEMINI_KEY })
 
 const { data: doc } = await supabase.from("documents").select("*").eq("id", docId).single()
 if (!doc) { console.error("Document not found"); process.exit(1) }
@@ -45,12 +45,19 @@ try {
 // Fall back to Gemini Vision for scanned PDFs
 if (text.length < MIN_TEXT) {
   console.log("Scanned PDF detected — using Gemini Vision OCR...")
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
-  const result = await model.generateContent([
-    { inlineData: { mimeType: "application/pdf", data: buffer.toString("base64") } },
-    { text: "Extract all text from this document. Preserve headings and paragraphs. Output plain text only." }
-  ])
-  text = result.response.text().trim()
+  const result = await ai.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inlineData: { mimeType: "application/pdf", data: buffer.toString("base64") } },
+          { text: "Extract all text from this document. Preserve headings and paragraphs. Output plain text only." },
+        ],
+      },
+    ],
+  })
+  text = (result.text ?? "").trim()
   console.log(`Gemini Vision extracted ${text.length} chars`)
 }
 

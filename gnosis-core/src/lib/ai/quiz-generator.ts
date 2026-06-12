@@ -47,15 +47,14 @@ const DIFFICULTY_GUIDANCE: Record<Difficulty, string> = {
 }
 
 export async function embedQuery(text: string): Promise<number[]> {
-  const model = genAI.getGenerativeModel({ model: "gemini-embedding-001" })
   const result = await withRetry(() =>
-    model.embedContent({
-      content: { parts: [{ text }], role: "user" },
-      taskType: "RETRIEVAL_QUERY" as never,
-      outputDimensionality: 768,
-    } as never)
+    genAI.models.embedContent({
+      model: "gemini-embedding-001",
+      contents: text,
+      config: { taskType: "RETRIEVAL_QUERY", outputDimensionality: 768 },
+    })
   )
-  return result.embedding.values
+  return result.embeddings?.[0]?.values ?? []
 }
 
 export async function generateQuestions(opts: GenerateOptions): Promise<GenerateResult> {
@@ -86,9 +85,12 @@ export async function generateQuestions(opts: GenerateOptions): Promise<Generate
     : ""
 
   // 4. Generate with Gemini
-  const model = genAI.getGenerativeModel({
-    model: QUIZ_MODEL,
-    systemInstruction: `You are an expert educational quiz generator. Output ONLY valid JSON — no markdown fences, no extra text.
+  const result = await withRetry(() =>
+    genAI.models.generateContent({
+      model: QUIZ_MODEL,
+      contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${questionCount} ${difficulty}-level multiple-choice questions from the excerpts above.${topicInstruction}`,
+      config: {
+        systemInstruction: `You are an expert educational quiz generator. Output ONLY valid JSON — no markdown fences, no extra text.
 
 Schema:
 {
@@ -110,24 +112,16 @@ Rules:
 - correct must be exactly "A", "B", "C", or "D"
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested`,
-    generationConfig: {
-      responseMimeType: "application/json",
-      maxOutputTokens: Math.min(questionCount * 600, 8000),
-      temperature: 0.7,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      thinkingConfig: { thinkingBudget: 0 },
-    } as never,
-  })
-
-  const result = await withRetry(() =>
-    model.generateContent(
-      `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${questionCount} ${difficulty}-level multiple-choice questions from the excerpts above.${topicInstruction}`
-    )
+        responseMimeType: "application/json",
+        maxOutputTokens: Math.min(questionCount * 600, 8000),
+        temperature: 0.7,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    })
   )
 
-  const text = result.response.text()
-  const meta = result.response.usageMetadata as { totalTokenCount?: number } | undefined
-  const tokensUsed = meta?.totalTokenCount ?? 0
+  const text = result.text ?? ""
+  const tokensUsed = result.usageMetadata?.totalTokenCount ?? 0
 
   let parsed: { questions: GeneratedQuestion[] }
   try {
@@ -141,10 +135,15 @@ Rules:
   return { questions: parsed.questions.slice(0, questionCount), tokensUsed }
 }
 
-function buildQuizModel(questionCount: number, difficulty: Difficulty) {
-  return genAI.getGenerativeModel({
-    model: QUIZ_MODEL,
-    systemInstruction: `You are an expert educational quiz generator. Output ONLY valid JSON — no markdown fences, no extra text.
+export async function generateQuestionsFromPrompt(opts: GenerateFromPromptOptions): Promise<GenerateResult> {
+  const { prompt, difficulty, questionCount } = opts
+
+  const result = await withRetry(() =>
+    genAI.models.generateContent({
+      model: QUIZ_MODEL,
+      contents: `Generate exactly ${questionCount} ${difficulty}-level multiple-choice questions about:\n\n${prompt}`,
+      config: {
+        systemInstruction: `You are an expert educational quiz generator. Output ONLY valid JSON — no markdown fences, no extra text.
 
 Schema:
 {
@@ -165,30 +164,16 @@ Rules:
 - correct must be exactly "A", "B", "C", or "D"
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested`,
-    generationConfig: {
-      responseMimeType: "application/json",
-      maxOutputTokens: Math.min(questionCount * 600, 8000),
-      temperature: 0.7,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      thinkingConfig: { thinkingBudget: 0 },
-    } as never,
-  })
-}
-
-export async function generateQuestionsFromPrompt(opts: GenerateFromPromptOptions): Promise<GenerateResult> {
-  const { prompt, difficulty, questionCount } = opts
-
-  const model = buildQuizModel(questionCount, difficulty)
-
-  const result = await withRetry(() =>
-    model.generateContent(
-      `Generate exactly ${questionCount} ${difficulty}-level multiple-choice questions about:\n\n${prompt}`
-    )
+        responseMimeType: "application/json",
+        maxOutputTokens: Math.min(questionCount * 600, 8000),
+        temperature: 0.7,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    })
   )
 
-  const text = result.response.text()
-  const meta = result.response.usageMetadata as { totalTokenCount?: number } | undefined
-  const tokensUsed = meta?.totalTokenCount ?? 0
+  const text = result.text ?? ""
+  const tokensUsed = result.usageMetadata?.totalTokenCount ?? 0
 
   let parsed: { questions: GeneratedQuestion[] }
   try {

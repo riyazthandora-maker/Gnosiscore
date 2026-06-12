@@ -1,6 +1,6 @@
-import { GoogleGenerativeAI } from "@google/generative-ai"
+import { GoogleGenAI } from "@google/genai"
 
-export const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY!)
+export const genAI = new GoogleGenAI({ apiKey: process.env.GOOGLE_AI_API_KEY! })
 
 export const QUIZ_MODEL       = "gemini-2.5-flash"
 export const DIAGNOSTIC_MODEL = "gemini-2.5-flash"
