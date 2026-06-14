@@ -11,10 +11,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   if (role !== "admin") redirect("/login")
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex h-screen overflow-hidden">
       <AdminNav />
-      <main className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-5xl px-6 py-8">{children}</div>
+      <main className="flex-1 min-w-0 overflow-y-auto">
+        <div className="md:hidden h-14" />
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 py-8">{children}</div>
       </main>
     </div>
   )

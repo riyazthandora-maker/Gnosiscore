@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import type { UserRole } from "@/types"
@@ -15,7 +16,7 @@ export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [otp, setOtp] = useState("")
-  const [usePassword, setUsePassword] = useState(false)
+  const [usePassword, setUsePassword] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -128,7 +129,15 @@ export function LoginForm() {
       </div>
       {usePassword && (
         <div className="space-y-1">
-          <label htmlFor="password" className="text-sm font-medium">Password</label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="text-sm font-medium">Password</label>
+            <Link
+              href="/forgot-password"
+              className="text-xs text-muted-foreground hover:text-primary transition-colors"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <input
             id="password"
             type="password"
@@ -141,14 +150,16 @@ export function LoginForm() {
       )}
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? (usePassword ? "Signing in…" : "Sending code…") : (usePassword ? "Sign in" : "Send OTP")}
+        {loading
+          ? (usePassword ? "Signing in…" : "Sending code…")
+          : (usePassword ? "Sign in" : "Send OTP")}
       </Button>
       <button
         type="button"
         className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
         onClick={() => { setUsePassword(!usePassword); setError(null) }}
       >
-        {usePassword ? "Use one-time code instead" : "Sign in with password instead"}
+        {usePassword ? "Sign in with a one-time code instead" : "Sign in with password instead"}
       </button>
     </form>
   )

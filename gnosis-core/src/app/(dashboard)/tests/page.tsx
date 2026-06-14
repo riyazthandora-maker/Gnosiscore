@@ -43,14 +43,14 @@ export default function TestsPage() {
   return (
     <div className="space-y-8">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">Tests</h1>
           <p className="text-muted-foreground">Generate questions, review them, then build and assign tests.</p>
         </div>
-        <Link href="/tests/generate">
+        <Link href="/tests/generate" className="shrink-0">
           <Button className="gap-2">
             <Plus className="size-4" />
-            Generate questions
+            <span className="hidden sm:inline">Generate </span>questions
           </Button>
         </Link>
       </div>
@@ -131,11 +131,15 @@ export default function TestsPage() {
                   <div className="flex shrink-0 items-center gap-2">
                     <Link href={`/tests/${test.id}/assign`}>
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                        <Users className="size-3" /> Assign
+                        <Users className="size-3" />
+                        <span className="hidden sm:inline">Assign</span>
                       </Button>
                     </Link>
                     <Link href={`/tests/${test.id}`}>
-                      <Button variant="ghost" size="sm" className="text-xs">Edit</Button>
+                      <Button variant="ghost" size="sm" className="text-xs">
+                        <span className="hidden sm:inline">Edit</span>
+                        <span className="sm:hidden">→</span>
+                      </Button>
                     </Link>
                   </div>
                 </motion.div>
@@ -147,10 +151,10 @@ export default function TestsPage() {
 
       {/* Pending questions review CTA */}
       {bankTotal > approvedCount && (
-        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Loader2 className="size-5 text-amber-500 shrink-0" />
-            <div>
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <Loader2 className="size-5 shrink-0 text-amber-500" />
+            <div className="min-w-0">
               <p className="text-sm font-medium">{bankTotal - approvedCount} questions pending your review</p>
               <p className="text-xs text-muted-foreground">Review and approve generated questions before adding them to tests.</p>
             </div>

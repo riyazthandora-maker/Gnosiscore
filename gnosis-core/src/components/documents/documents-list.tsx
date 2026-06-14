@@ -1,12 +1,36 @@
 "use client"
 
+import { useState } from "react"
 import { AnimatePresence } from "framer-motion"
-import { FileText } from "lucide-react"
+import { FileText, RefreshCw } from "lucide-react"
 import { DocumentCard } from "./document-card"
 import { useDocuments } from "@/lib/hooks/use-documents"
+import { useQueryClient } from "@tanstack/react-query"
+import { Button } from "@/components/ui/button"
+import type { Document } from "@/types"
 
 export function DocumentsList() {
   const { documents, isLoading, isError } = useDocuments()
+  const queryClient = useQueryClient()
+  const [reprocessingAll, setReprocessingAll] = useState(false)
+
+  const reprocessable = (documents as Document[]).filter(
+    (d) => d.processing_status === "ready" || d.processing_status === "failed"
+  )
+
+  async function handleReprocessAll() {
+    setReprocessingAll(true)
+    try {
+      await Promise.allSettled(
+        reprocessable.map((d) =>
+          fetch(`/api/documents/${d.id}/process`, { method: "POST" })
+        )
+      )
+      await queryClient.invalidateQueries({ queryKey: ["documents"] })
+    } finally {
+      setReprocessingAll(false)
+    }
+  }
 
   if (isLoading) {
     return (
@@ -38,6 +62,20 @@ export function DocumentsList() {
 
   return (
     <div className="space-y-3">
+      {reprocessable.length > 1 && (
+        <div className="flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1.5 px-3 text-xs"
+            disabled={reprocessingAll}
+            onClick={handleReprocessAll}
+          >
+            <RefreshCw className={`size-3 ${reprocessingAll ? "animate-spin" : ""}`} />
+            {reprocessingAll ? "Reprocessing…" : `Reprocess all (${reprocessable.length})`}
+          </Button>
+        </div>
+      )}
       <AnimatePresence>
         {documents.map((doc) => (
           <DocumentCard key={doc.id} doc={doc} />

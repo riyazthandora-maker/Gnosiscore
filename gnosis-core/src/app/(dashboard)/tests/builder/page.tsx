@@ -116,7 +116,7 @@ export default function BuilderPage() {
         <p className="text-muted-foreground">Choose questions from your bank, set a title, and save.</p>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr_300px]">
+      <div className="grid gap-8 xl:grid-cols-[1fr_300px]">
         {/* Question bank */}
         <section className="space-y-3">
           {generations.length > 0 && (
@@ -135,7 +135,7 @@ export default function BuilderPage() {
             </div>
           )}
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -145,7 +145,7 @@ export default function BuilderPage() {
                 className="w-full rounded-lg border border-input bg-background py-2 pl-8 pr-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
               />
             </div>
-            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1">
+            <div className="flex items-center gap-1 rounded-lg border border-border bg-muted/30 p-1 self-start sm:self-auto">
               <Filter className="ml-1 size-3.5 text-muted-foreground" />
               {DIFFICULTIES.map((d) => (
                 <button

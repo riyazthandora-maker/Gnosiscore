@@ -1,9 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { generateQuestions, generateQuestionsFromPrompt, RAGThresholdError } from "@/lib/ai/quiz-generator"
-import { GENERATION_ADMIN_THRESHOLD, RAG_SIMILARITY_THRESHOLD } from "@/types"
+import { generateQuestions, generateQuestionsFromPrompt, embedQuery } from "@/lib/ai/quiz-generator"
+import { GENERATION_ADMIN_THRESHOLD } from "@/types"
 import type { Difficulty } from "@/types"
 import { NextResponse } from "next/server"
+import { sendAdminGenerationRequestAlert } from "@/lib/email/send-admin-alert"
 
 interface GenerateBody {
   name: string
@@ -78,18 +79,19 @@ export async function POST(request: Request) {
 
   try {
     if (hasDocs && questionCount > GENERATION_ADMIN_THRESHOLD) {
-      // RAG validation only — queue for admin approval
-      const { RAGThresholdError: RTE, embedQuery } = await import("@/lib/ai/quiz-generator")
+      // RAG validation only — confirm document has chunks before queuing for admin approval
       const queryText = promptContext || "important concepts and key facts"
       const embedding = await embedQuery(queryText)
       const { data: chunks, error: ragErr } = await supabase.rpc("match_chunks", {
-        query_embedding: embedding,
+        query_embedding: `[${embedding.join(",")}]`,
         document_ids: documentIds,
-        similarity_threshold: RAG_SIMILARITY_THRESHOLD,
+        similarity_threshold: 0,
         match_count: 1,
       })
       if (ragErr) throw new Error(ragErr.message)
-      if (!chunks || (chunks as unknown[]).length === 0) throw new RTE()
+      if (!chunks || (chunks as unknown[]).length === 0) {
+        throw new Error("No content found for this document. Please re-upload and process it.")
+      }
 
       const { data: genReq, error: reqErr } = await supabase
         .from("generation_requests")
@@ -106,6 +108,20 @@ export async function POST(request: Request) {
         .single()
 
       if (reqErr || !genReq) return NextResponse.json({ error: "Failed to create request." }, { status: 500 })
+
+      const adminDb = createAdminClient()
+      const { data: adminUser } = await adminDb.from("users").select("email").eq("role", "admin").limit(1).single()
+      if (adminUser?.email) {
+        const { data: educatorProfile } = await supabase.from("users").select("email, full_name").eq("id", user.id).single()
+        sendAdminGenerationRequestAlert({
+          adminEmail: adminUser.email,
+          educatorName: educatorProfile?.full_name ?? "Unknown",
+          educatorEmail: educatorProfile?.email ?? "",
+          requestName: name.trim(),
+          questionCount,
+        }).catch((err: unknown) => console.error("[generate] admin alert failed:", (err as Error)?.message))
+      }
+
       return NextResponse.json({ status: "pending_admin", request_id: genReq.id }, { status: 202 })
     }
 
@@ -172,9 +188,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "completed", question_count: rows.length }, { status: 201 })
 
   } catch (err) {
-    if (err instanceof RAGThresholdError) {
-      return NextResponse.json({ error: err.message }, { status: 422 })
-    }
     const message = err instanceof Error ? err.message : "Generation failed."
     console.error("[generate] error:", message)
     return NextResponse.json({ error: message }, { status: 500 })

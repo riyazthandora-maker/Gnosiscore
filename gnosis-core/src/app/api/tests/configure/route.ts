@@ -40,13 +40,13 @@ export async function POST(request: Request) {
   // Verify the document belongs to this user and is ready
   const { data: doc, error: docErr } = await supabase
     .from("documents")
-    .select("id, title, status")
+    .select("id, file_name, processing_status")
     .eq("id", document_id)
-    .eq("user_id", user.id)
+    .eq("owner_id", user.id)
     .single()
 
   if (docErr || !doc) return NextResponse.json({ error: "Document not found." }, { status: 404 })
-  if (doc.status !== "ready") return NextResponse.json({ error: "Document is still being processed." }, { status: 409 })
+  if (doc.processing_status !== "ready") return NextResponse.json({ error: "Document is still being processed." }, { status: 409 })
 
   // Save test config
   const { data: config, error: configErr } = await supabase
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
     per_question_secs,
     show_answer_mode,
     topic_filter,
-    document_title: doc.title,
+    document_title: doc.file_name,
   }
 
   // Create attempt record

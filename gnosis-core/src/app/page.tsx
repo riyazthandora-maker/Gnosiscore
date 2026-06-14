@@ -33,15 +33,17 @@ const features = [
 export default function HomePage() {
   return (
     <div className="flex min-h-screen flex-col">
-      <header className="border-b border-border/50 px-6 py-4">
-        <div className="mx-auto flex max-w-6xl items-center justify-between">
-          <span className="text-xl font-bold tracking-tight text-primary">GnosisCore</span>
-          <nav className="flex items-center gap-3">
+      <header className="border-b border-border/50 px-4 py-4 sm:px-6">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
+          <span className="shrink-0 text-xl font-bold tracking-tight text-primary">GnosisCore</span>
+          <nav className="flex items-center gap-2 sm:gap-3">
             <Link href="/login">
               <Button variant="ghost" size="sm">Sign in</Button>
             </Link>
             <Link href="/register">
-              <Button size="sm">Get started free</Button>
+              <Button size="sm">
+                <span className="hidden sm:inline">Get started </span>free
+              </Button>
             </Link>
           </nav>
         </div>

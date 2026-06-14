@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { generateQuestions, RAGThresholdError } from "@/lib/ai/quiz-generator"
+import { generateQuestions } from "@/lib/ai/quiz-generator"
 import { sendGenerationNotification } from "@/lib/email/send-generation-notification"
 import type { Difficulty } from "@/types"
 import { NextResponse } from "next/server"
@@ -157,9 +157,7 @@ async function runGeneration(
       })
     }).catch((err: Error) => console.error("[admin-generate] questions_ready email failed:", err?.message))
   } catch (err) {
-    const message = err instanceof RAGThresholdError
-      ? err.message
-      : err instanceof Error ? err.message : "Generation failed."
+    const message = err instanceof Error ? err.message : "Generation failed."
 
     await adminDb
       .from("generation_requests")

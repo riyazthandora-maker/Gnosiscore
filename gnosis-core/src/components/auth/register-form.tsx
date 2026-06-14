@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client"
 import type { UserRole } from "@/types"
 import { roleHomePath } from "@/types"
 
+type Step = "form" | "verify"
+
 interface FormData {
   full_name: string
   email: string
@@ -17,6 +19,7 @@ interface FormData {
 
 export function RegisterForm() {
   const router = useRouter()
+  const [step, setStep] = useState<Step>("form")
   const [form, setForm] = useState<FormData>({
     full_name: "",
     email: "",
@@ -24,6 +27,8 @@ export function RegisterForm() {
     confirm_password: "",
     role: "student",
   })
+  const [otp, setOtp] = useState("")
+  const [otpToken, setOtpToken] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -31,7 +36,7 @@ export function RegisterForm() {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
-  async function handleRegister(e: React.FormEvent) {
+  async function handleFormSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
 
@@ -46,6 +51,36 @@ export function RegisterForm() {
 
     setLoading(true)
 
+    // Educator/parent must verify email before account creation
+    if (form.role === "educator_parent") {
+      const res = await fetch("/api/auth/otp/send-verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: form.email }),
+      })
+      const data = await res.json()
+      setLoading(false)
+      if (!res.ok) {
+        setError(data.error ?? "Failed to send verification code.")
+        return
+      }
+      setOtpToken(data.token)
+      setStep("verify")
+      return
+    }
+
+    await createAccount()
+  }
+
+  async function handleVerifySubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError(null)
+    if (!otp.trim()) { setError("Enter the verification code."); return }
+    setLoading(true)
+    await createAccount(otp.trim(), otpToken)
+  }
+
+  async function createAccount(otpCode?: string, otpVerifyToken?: string) {
     const regRes = await fetch("/api/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -54,6 +89,7 @@ export function RegisterForm() {
         password: form.password,
         full_name: form.full_name,
         role: form.role,
+        ...(otpCode ? { otpCode, otpToken: otpVerifyToken } : {}),
       }),
     })
     const regData = await regRes.json()
@@ -83,8 +119,51 @@ export function RegisterForm() {
     router.refresh()
   }
 
+  // OTP verification step (educator_parent only)
+  if (step === "verify") {
+    return (
+      <form onSubmit={handleVerifySubmit} className="space-y-4">
+        <div className="rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-center">
+          <p className="font-medium">Check your inbox</p>
+          <p className="mt-1 text-muted-foreground">
+            We sent a 6-digit code to <strong>{form.email}</strong>.
+            Enter it below to verify your email and create your account.
+          </p>
+        </div>
+        <div className="space-y-1">
+          <label htmlFor="otp" className="text-sm font-medium">Verification code</label>
+          <input
+            id="otp"
+            type="text"
+            inputMode="numeric"
+            pattern="\d{6}"
+            maxLength={6}
+            required
+            autoFocus
+            value={otp}
+            onChange={(e) => setOtp(e.target.value)}
+            placeholder="123456"
+            className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 tracking-widest text-center text-lg"
+          />
+        </div>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        <Button type="submit" className="w-full" disabled={loading}>
+          {loading ? "Creating account…" : "Verify & create account"}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          className="w-full text-sm"
+          onClick={() => { setStep("form"); setOtp(""); setError(null) }}
+        >
+          Go back
+        </Button>
+      </form>
+    )
+  }
+
   return (
-    <form onSubmit={handleRegister} className="space-y-4">
+    <form onSubmit={handleFormSubmit} className="space-y-4">
       <div className="space-y-1">
         <label htmlFor="full_name" className="text-sm font-medium">Full name</label>
         <input
@@ -153,10 +232,17 @@ export function RegisterForm() {
             </button>
           ))}
         </div>
+        {form.role === "educator_parent" && (
+          <p className="text-xs text-muted-foreground">
+            You&apos;ll receive a verification code at your email before your account is created.
+          </p>
+        )}
       </div>
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" className="w-full" disabled={loading}>
-        {loading ? "Creating account…" : "Create account"}
+        {loading
+          ? (form.role === "educator_parent" ? "Sending code…" : "Creating account…")
+          : (form.role === "educator_parent" ? "Send verification code" : "Create account")}
       </Button>
     </form>
   )

@@ -66,11 +66,16 @@ export async function embedAndStore(
       })
     )
 
+    const values = result.embeddings?.[0]?.values
+    if (!values || values.length === 0) {
+      throw new Error(`Embedding API returned empty values for chunk ${i}.`)
+    }
+
     const { error } = await supabase.from("document_chunks").insert({
       document_id: documentId,
       chunk_index: i,
       content,
-      embedding: result.embeddings?.[0]?.values ?? [],
+      embedding: `[${values.join(",")}]`,
       token_count: Math.ceil(content.length / 4),
     })
     if (error) throw new Error(`Failed to store chunk ${i}: ${error.message}`)

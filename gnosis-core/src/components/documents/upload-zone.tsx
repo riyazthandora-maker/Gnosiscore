@@ -121,7 +121,7 @@ export function UploadZone() {
     <div className="space-y-3">
       <div
         className={cn(
-          "relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors",
+          "relative flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors sm:px-6 sm:py-12",
           dragging
             ? "border-primary bg-primary/5"
             : "border-border hover:border-primary/50 hover:bg-muted/30",

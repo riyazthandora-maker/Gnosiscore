@@ -2,10 +2,11 @@
 
 import { useState } from "react"
 import { motion } from "framer-motion"
-import { FileText, Loader2, AlertCircle, CheckCircle2, Trash2, BookOpen } from "lucide-react"
+import { FileText, Loader2, AlertCircle, CheckCircle2, Trash2, BookOpen, RefreshCw } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { useDeleteDocument } from "@/lib/hooks/use-documents"
+import { useQueryClient } from "@tanstack/react-query"
 import { cn } from "@/lib/utils"
 import type { Document } from "@/types"
 
@@ -54,9 +55,21 @@ function formatDate(iso: string) {
 
 export function DocumentCard({ doc }: { doc: Document }) {
   const [confirming, setConfirming] = useState(false)
+  const [reprocessing, setReprocessing] = useState(false)
   const { mutate: deleteDoc, isPending } = useDeleteDocument()
+  const queryClient = useQueryClient()
   const status = STATUS[doc.processing_status] ?? STATUS.pending
   const StatusIcon = status.icon
+
+  async function handleReprocess() {
+    setReprocessing(true)
+    try {
+      await fetch(`/api/documents/${doc.id}/process`, { method: "POST" })
+      await queryClient.invalidateQueries({ queryKey: ["documents"] })
+    } finally {
+      setReprocessing(false)
+    }
+  }
 
   return (
     <motion.div
@@ -64,56 +77,70 @@ export function DocumentCard({ doc }: { doc: Document }) {
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.97 }}
-      className="flex items-start gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/20"
+      className="flex items-start gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/20"
     >
-      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
-        <FileText className="size-5 text-muted-foreground" />
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted sm:size-10">
+        <FileText className="size-4 text-muted-foreground sm:size-5" />
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="truncate font-medium">{doc.file_name}</p>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <p className="truncate text-sm font-medium sm:text-base">{doc.file_name}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span>{formatBytes(doc.total_bytes)}</span>
-          {doc.chunk_count && <span>{doc.chunk_count.toLocaleString()} chunks</span>}
+          {doc.chunk_count && <span className="hidden sm:inline">{doc.chunk_count.toLocaleString()} chunks</span>}
           <span>{formatDate(doc.created_at)}</span>
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <span className={cn("inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium", status.bg, status.color)}>
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className={cn("inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium", status.bg, status.color)}>
           <StatusIcon className={cn("size-3", status.spin && "animate-spin")} />
-          {status.label}
+          <span className="hidden sm:inline">{status.label}</span>
         </span>
 
         {doc.processing_status === "ready" && (
-          <Link href={`/tests/new?docId=${doc.id}`}>
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-              <BookOpen className="size-3" /> New test
+          <Link href={`/tests/generate?docId=${doc.id}`}>
+            <Button variant="outline" size="sm" className="h-7 gap-1 px-2 text-xs">
+              <BookOpen className="size-3" />
+              <span className="hidden sm:inline">New test</span>
             </Button>
           </Link>
+        )}
+
+        {(doc.processing_status === "failed" || doc.processing_status === "ready") && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-primary sm:size-8"
+            disabled={reprocessing}
+            onClick={handleReprocess}
+            title="Reprocess document"
+          >
+            <RefreshCw className={cn("size-3.5 sm:size-4", reprocessing && "animate-spin")} />
+          </Button>
         )}
 
         {!confirming ? (
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 text-muted-foreground hover:text-destructive"
+            className="size-7 text-muted-foreground hover:text-destructive sm:size-8"
             onClick={() => setConfirming(true)}
           >
-            <Trash2 className="size-4" />
+            <Trash2 className="size-3.5 sm:size-4" />
           </Button>
         ) : (
           <div className="flex items-center gap-1">
             <Button
               variant="destructive"
               size="sm"
-              className="h-7 text-xs"
+              className="h-7 px-2 text-xs"
               disabled={isPending}
               onClick={() => deleteDoc(doc.id)}
             >
               {isPending ? <Loader2 className="size-3 animate-spin" /> : "Delete"}
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setConfirming(false)}>
+            <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setConfirming(false)}>
               Cancel
             </Button>
           </div>

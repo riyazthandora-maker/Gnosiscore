@@ -2,6 +2,8 @@ import { NextResponse } from "next/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { checkRateLimit } from "@/lib/rate-limit"
 import { headers } from "next/headers"
+import { sendAdminNewRegistrationAlert } from "@/lib/email/send-admin-alert"
+import { verifyOtpToken } from "@/lib/otp-token"
 
 const IS_DEV = process.env.NODE_ENV === "development" ||
   !process.env.BACKEND_API_URL ||
@@ -16,12 +18,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Too many attempts. Please wait." }, { status: 429 })
   }
 
-  const { email, password, full_name, role } = await request.json()
+  const { email, password, full_name, role, otpCode, otpToken } = await request.json()
   if (!email?.trim() || !role?.trim()) {
     return NextResponse.json({ error: "Email and role required." }, { status: 400 })
   }
   if (!password || password.length < 8) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 })
+  }
+
+  // Educator/parent registrations require email OTP verification
+  if (role === "educator_parent") {
+    if (!otpCode?.trim() || !otpToken?.trim()) {
+      return NextResponse.json({ error: "Email verification required." }, { status: 400 })
+    }
+    if (!verifyOtpToken(email.trim().toLowerCase(), otpCode.trim(), otpToken.trim())) {
+      return NextResponse.json({ error: "Invalid or expired verification code." }, { status: 400 })
+    }
   }
 
   const supabase = createAdminClient()
@@ -78,6 +90,17 @@ export async function POST(request: Request) {
       }
     }
 
+    if (!createErr && role === "educator_parent") {
+      const { data: adminUser } = await supabase.from("users").select("email").eq("role", "admin").limit(1).single()
+      if (adminUser?.email) {
+        sendAdminNewRegistrationAlert({
+          adminEmail: adminUser.email,
+          fullName: full_name ?? email.trim(),
+          email: email.trim(),
+        }).catch((err: unknown) => console.error("[register] admin alert failed:", (err as Error)?.message))
+      }
+    }
+
     return NextResponse.json({ success: true })
   }
 
@@ -127,6 +150,17 @@ export async function POST(request: Request) {
     })
     if (updateErr) {
       return NextResponse.json({ error: updateErr.message }, { status: 500 })
+    }
+  }
+
+  if (!createErr && role === "educator_parent") {
+    const { data: adminUser } = await supabase.from("users").select("email").eq("role", "admin").limit(1).single()
+    if (adminUser?.email) {
+      sendAdminNewRegistrationAlert({
+        adminEmail: adminUser.email,
+        fullName: full_name ?? email.trim(),
+        email: email.trim(),
+      }).catch((err: unknown) => console.error("[register] admin alert failed:", (err as Error)?.message))
     }
   }
 

@@ -2,11 +2,11 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import type { UserRole } from "@/types"
 
-const PUBLIC_ROUTES = ["/", "/login", "/register", "/logout", "/pending-approval", "/auth"]
+const PUBLIC_ROUTES = ["/", "/login", "/register", "/logout", "/forgot-password", "/pending-approval", "/auth"]
 
 const ROLE_ROUTES: Record<UserRole, string[]> = {
   admin:           ["/admin"],
-  educator_parent: ["/dashboard", "/documents", "/tests", "/analytics", "/settings"],
+  educator_parent: ["/documents", "/tests", "/analytics", "/settings"],
   student:         ["/student"],
 }
 

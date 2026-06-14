@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import { Sparkles, FileText, AlertTriangle, Loader2, CheckCircle2, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -17,9 +17,11 @@ const DIFFICULTIES: { value: Difficulty; label: string; desc: string }[] = [
 
 export default function GeneratePage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const preselectedDocId = searchParams.get("docId")
 
   const [name, setName] = useState("")
-  const [selectedDocs, setSelectedDocs] = useState<string[]>([])
+  const [selectedDocs, setSelectedDocs] = useState<string[]>(preselectedDocId ? [preselectedDocId] : [])
   const [prompt, setPrompt] = useState("")
   const [questionCount, setQuestionCount] = useState(10)
   const [difficulty, setDifficulty] = useState<Difficulty>("medium")
@@ -254,7 +256,7 @@ export default function GeneratePage() {
         {/* ── Difficulty ──────────────────────────────────────────── */}
         <section className="space-y-3">
           <label className="text-sm font-semibold">Difficulty</label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {DIFFICULTIES.map(({ value, label, desc }) => (
               <button
                 key={value}
@@ -311,7 +313,7 @@ export default function GeneratePage() {
           </div>
         )}
 
-        <div className="flex justify-end gap-3">
+        <div className="flex flex-wrap justify-end gap-3">
           <Button type="button" variant="ghost" onClick={() => router.push("/tests")}>
             Cancel
           </Button>

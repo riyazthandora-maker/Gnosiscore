@@ -1,17 +1,6 @@
 import { genAI, QUIZ_MODEL, withRetry } from "@/lib/ai/gemini"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Difficulty } from "@/types"
-import { RAG_SIMILARITY_THRESHOLD } from "@/types"
-
-export class RAGThresholdError extends Error {
-  constructor() {
-    super(
-      "No document content matched the query with sufficient relevance (threshold: 72%). " +
-      "Try a different topic or upload more specific material."
-    )
-    this.name = "RAGThresholdError"
-  }
-}
 
 export interface GeneratedQuestion {
   body: string
@@ -64,16 +53,19 @@ export async function generateQuestions(opts: GenerateOptions): Promise<Generate
   const queryText = topic?.trim() || "important concepts and key facts"
   const embedding = await embedQuery(queryText)
 
-  // 2. RAG: retrieve relevant chunks above similarity threshold
+  // 2. RAG: retrieve top-N chunks regardless of similarity score
+  // PostgREST cannot cast a JS number[] to vector(768) automatically — pass as pgvector string.
   const { data: chunks, error: ragErr } = await supabase.rpc("match_chunks", {
-    query_embedding: embedding,
+    query_embedding: `[${embedding.join(",")}]`,
     document_ids: documentIds,
-    similarity_threshold: RAG_SIMILARITY_THRESHOLD,
+    similarity_threshold: 0,
     match_count: 20,
   })
 
   if (ragErr) throw new Error(`RAG search failed: ${ragErr.message}`)
-  if (!chunks || (chunks as unknown[]).length === 0) throw new RAGThresholdError()
+  if (!chunks || (chunks as unknown[]).length === 0) {
+    throw new Error("No content found for this document. Please re-upload and process it.")
+  }
 
   // 3. Build context from retrieved chunks
   const context = (chunks as { content: string; similarity: number }[])
