@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import { FILE_LIMITS } from "@/types"
+import { getPlatformSettings } from "@/lib/platform-settings"
 
 const ACCEPTED_MIME = ["application/pdf", "image/png", "image/jpeg", "image/webp"]
 
@@ -16,8 +16,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Only PDF and images are accepted." }, { status: 400 })
   }
 
-  if (size > FILE_LIMITS.perFile) {
-    const mb = FILE_LIMITS.perFile / 1024 / 1024
+  const { file_size_limit_bytes } = await getPlatformSettings()
+  if (size > file_size_limit_bytes) {
+    const mb = (file_size_limit_bytes / 1024 / 1024).toFixed(0)
     return NextResponse.json(
       { error: `File exceeds the ${mb} MB per-file limit.` },
       { status: 413 }

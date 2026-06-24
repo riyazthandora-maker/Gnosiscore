@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, UserCheck, Sparkles, LogOut, Menu, X } from "lucide-react"
+import { LayoutDashboard, UserCheck, Sparkles, Settings, LogOut, Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
@@ -68,6 +68,7 @@ export function AdminNav() {
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard, badge: 0, exact: true },
     { href: "/admin/registrations", label: "Registrations", icon: UserCheck, badge: counts.registrations, exact: false },
     { href: "/admin/generation-requests", label: "Generation Requests", icon: Sparkles, badge: counts.generationRequests, exact: false },
+    { href: "/admin/settings", label: "Platform Settings", icon: Settings, badge: 0, exact: false },
   ]
 
   function renderNavLinks(onClick?: () => void) {

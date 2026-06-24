@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
-import { BarChart3, Users, Loader2, ChevronUp, ChevronDown, ExternalLink } from "lucide-react"
+import { BarChart3, Users, Loader2, ChevronUp, ChevronDown, ExternalLink, Brain } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface TestRow {
@@ -196,6 +196,7 @@ function StudentsTab() {
                 <SortButton label={label} sortKey={key} current={sortKey} dir={sortDir} onSort={toggleSort} />
               </th>
             ))}
+            <th className="px-4 py-3" />
           </tr>
         </thead>
         <tbody>
@@ -216,6 +217,14 @@ function StudentsTab() {
               </td>
               <td className="px-4 py-3"><ScoreBadge pct={s.avg_score} /></td>
               <td className="px-4 py-3 text-xs text-muted-foreground">{formatDate(s.last_attempt_at)}</td>
+              <td className="px-4 py-3">
+                <Link
+                  href={`/analytics/students/${s.id}`}
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                >
+                  <Brain className="size-3" /> Insights
+                </Link>
+              </td>
             </tr>
           ))}
         </tbody>

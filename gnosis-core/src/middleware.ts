@@ -54,6 +54,21 @@ export async function middleware(request: NextRequest) {
   // User is authenticated
   const role = (user.user_metadata?.role ?? "student") as UserRole
 
+  // Block deactivated educator accounts (skip API routes — they handle auth themselves)
+  if (role === "educator_parent" && !path.startsWith("/api/")) {
+    const { data: dbUser } = await supabase
+      .from("users")
+      .select("is_active")
+      .eq("id", user.id)
+      .single()
+    if (dbUser && dbUser.is_active === false) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/login"
+      url.searchParams.set("reason", "deactivated")
+      return NextResponse.redirect(url)
+    }
+  }
+
   // Redirect auth pages → role home
   if (path === "/login" || path === "/register") {
     const url = request.nextUrl.clone()

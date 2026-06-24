@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("users")
-    .select("id, email, full_name, whatsapp, role, account_status, created_at, approved_at, token_cap, tokens_used")
+    .select("id, email, full_name, whatsapp, role, account_status, is_active, created_at, approved_at, token_cap, tokens_used")
     .eq("role", "educator_parent")
     .order("created_at", { ascending: false })
 

@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import Link from "next/link"
-import { BookOpen, Plus, Clock, CheckCircle2, Users, Loader2 } from "lucide-react"
+import { BookOpen, Plus, Clock, CheckCircle2, Users, Loader2, Shuffle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { Test, Question } from "@/types"
@@ -75,11 +75,18 @@ export default function TestsPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Your tests</h2>
           {bankTotal > 0 && (
-            <Link href="/tests/builder">
-              <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                <BookOpen className="size-3.5" /> Build new test
-              </Button>
-            </Link>
+            <div className="flex gap-2">
+              <Link href="/tests/composite">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                  <Shuffle className="size-3.5" /> Random test
+                </Button>
+              </Link>
+              <Link href="/tests/builder">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                  <BookOpen className="size-3.5" /> Build new test
+                </Button>
+              </Link>
+            </div>
           )}
         </div>
 

@@ -10,7 +10,7 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // Verify student has an assignment for this test
+  // Verify assignment
   const { data: assignment } = await supabase
     .from("test_assignments")
     .select("id, due_at")
@@ -20,23 +20,18 @@ export async function GET(
 
   if (!assignment) return NextResponse.json({ error: "Test not assigned to you." }, { status: 403 })
 
-  // Check for a completed attempt (no retakes)
-  const { data: attempt } = await supabase
+  // Count completed attempts (retakes are allowed)
+  const { count: attemptCount } = await supabase
     .from("test_attempts")
-    .select("id")
+    .select("id", { count: "exact", head: true })
     .eq("test_id", testId)
     .eq("student_id", user.id)
     .not("completed_at", "is", null)
-    .single()
-
-  if (attempt) {
-    return NextResponse.json({ attempted: true, attempt_id: attempt.id })
-  }
 
   // Fetch test
   const { data: test, error: testErr } = await supabase
     .from("tests")
-    .select("id, title, description, question_ids, time_limit_min")
+    .select("id, title, description, question_ids, time_limit_min, allow_pause")
     .eq("id", testId)
     .eq("is_published", true)
     .single()
@@ -56,7 +51,7 @@ export async function GET(
 
   if (!questions) return NextResponse.json({ error: "Failed to load questions." }, { status: 500 })
 
-  // Preserve order from test.question_ids and strip is_correct
+  // Preserve order and strip is_correct
   const ordered = (test.question_ids as string[])
     .map((qid) => {
       const q = questions.find((x) => x.id === qid)
@@ -71,7 +66,11 @@ export async function GET(
     .filter(Boolean)
 
   return NextResponse.json({
-    attempted: false,
-    test: { ...test, questions: ordered, due_at: assignment.due_at },
+    attempt_count: attemptCount ?? 0,
+    test: {
+      ...test,
+      questions: ordered,
+      due_at: assignment.due_at,
+    },
   })
 }

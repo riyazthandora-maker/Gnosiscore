@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
-import { CheckCircle2, XCircle, Clock, UserCheck, Loader2, Pencil, X } from "lucide-react"
+import { CheckCircle2, XCircle, Clock, UserCheck, Loader2, Pencil, X, Power } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -20,6 +20,7 @@ interface EducatorRow {
   approved_at: string | null
   token_cap: number | null
   tokens_used: number
+  is_active: boolean
 }
 
 function StatusBadge({ status }: { status: AccountStatus }) {
@@ -213,6 +214,39 @@ function ApproveRejectButtons({ userId, currentStatus, onDone }: {
   )
 }
 
+function ActiveToggle({ userId, isActive }: { userId: string; isActive: boolean }) {
+  const qc = useQueryClient()
+  const { mutate, isPending } = useMutation({
+    mutationFn: async (active: boolean) => {
+      const res = await fetch(`/api/admin/users/${userId}/active`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: active }),
+      })
+      if (!res.ok) { const { error } = await res.json(); throw new Error(error) }
+      return res.json()
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["admin-registrations"] }),
+  })
+
+  return (
+    <button
+      onClick={() => mutate(!isActive)}
+      disabled={isPending}
+      title={isActive ? "Deactivate teacher" : "Activate teacher"}
+      className={cn(
+        "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors border",
+        isActive
+          ? "border-green-500/30 bg-green-500/10 text-green-600 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 dark:text-green-400"
+          : "border-destructive/30 bg-destructive/10 text-destructive hover:bg-green-500/10 hover:text-green-600 hover:border-green-500/30"
+      )}
+    >
+      {isPending ? <Loader2 className="size-3 animate-spin" /> : <Power className="size-3" />}
+      {isActive ? "Active" : "Inactive"}
+    </button>
+  )
+}
+
 const TABS: { key: FilterTab; label: string }[] = [
   { key: "pending",  label: "Pending" },
   { key: "approved", label: "Approved" },
@@ -301,11 +335,16 @@ export default function RegistrationsPage() {
                       {u.approved_at && <span>Reviewed: {formatDate(u.approved_at)}</span>}
                     </div>
                   </div>
-                  <ApproveRejectButtons
-                    userId={u.id}
-                    currentStatus={u.account_status}
-                    onDone={() => qc.invalidateQueries({ queryKey: ["admin-registrations"] })}
-                  />
+                  <div className="flex flex-wrap items-center gap-2">
+                    {u.account_status === "approved" && (
+                      <ActiveToggle userId={u.id} isActive={u.is_active} />
+                    )}
+                    <ApproveRejectButtons
+                      userId={u.id}
+                      currentStatus={u.account_status}
+                      onDone={() => qc.invalidateQueries({ queryKey: ["admin-registrations"] })}
+                    />
+                  </div>
                 </div>
                 <TokenCapEditor userId={u.id} tokenCap={u.token_cap} tokensUsed={u.tokens_used ?? 0} />
               </motion.div>

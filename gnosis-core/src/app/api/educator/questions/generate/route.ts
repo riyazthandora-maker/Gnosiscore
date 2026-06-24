@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { generateQuestions, generateQuestionsFromPrompt, embedQuery } from "@/lib/ai/quiz-generator"
-import { GENERATION_ADMIN_THRESHOLD } from "@/types"
 import type { Difficulty } from "@/types"
 import { NextResponse } from "next/server"
 import { sendAdminGenerationRequestAlert } from "@/lib/email/send-admin-alert"
+import { getPlatformSettings } from "@/lib/platform-settings"
 
 interface GenerateBody {
   name: string
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("role, account_status, token_cap, tokens_used")
+    .select("role, account_status, is_active, token_cap, tokens_used")
     .eq("id", user.id)
     .single()
 
@@ -31,6 +31,9 @@ export async function POST(request: Request) {
   }
   if (profile?.account_status !== "approved") {
     return NextResponse.json({ error: "Account pending approval." }, { status: 403 })
+  }
+  if (profile?.is_active === false) {
+    return NextResponse.json({ error: "Your account has been deactivated. Contact the admin." }, { status: 403 })
   }
   if (profile.token_cap !== null && profile.token_cap !== undefined && (profile.tokens_used ?? 0) >= profile.token_cap) {
     return NextResponse.json({ error: "Token cap reached. Contact your admin to increase the limit." }, { status: 429 })
@@ -77,8 +80,10 @@ export async function POST(request: Request) {
 
   const promptContext = hasDocs ? (topic?.trim() || prompt?.trim() || null) : (prompt?.trim() ?? null)
 
+  const { question_approval_threshold } = await getPlatformSettings()
+
   try {
-    if (hasDocs && questionCount > GENERATION_ADMIN_THRESHOLD) {
+    if (hasDocs && questionCount > question_approval_threshold) {
       // RAG validation only — confirm document has chunks before queuing for admin approval
       const queryText = promptContext || "important concepts and key facts"
       const embedding = await embedQuery(queryText)

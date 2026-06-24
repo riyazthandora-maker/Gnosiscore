@@ -4,7 +4,10 @@ import { use, useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useQuery, useMutation } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronLeft, ChevronRight, Clock, AlertCircle, Loader2, CheckCircle2 } from "lucide-react"
+import {
+  ChevronLeft, ChevronRight, Clock, AlertCircle,
+  Loader2, CheckCircle2, Pause, Play,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -22,22 +25,34 @@ interface TestData {
   description: string | null
   question_ids: string[]
   time_limit_min: number | null
+  allow_pause: boolean
   due_at: string | null
   questions: QuizQuestion[]
 }
 
-type Phase = "loading" | "playing" | "confirming" | "submitting"
+type Phase = "loading" | "playing" | "paused" | "confirming" | "submitting"
 
-function Timer({ seconds, onExpire }: { seconds: number; onExpire: () => void }) {
+const INACTIVITY_SECONDS = 600 // 10 minutes
+
+function Timer({
+  seconds,
+  running,
+  onExpire,
+}: {
+  seconds: number
+  running: boolean
+  onExpire: () => void
+}) {
   const [remaining, setRemaining] = useState(seconds)
   const onExpireRef = useRef(onExpire)
   onExpireRef.current = onExpire
 
   useEffect(() => {
+    if (!running) return
     if (remaining <= 0) { onExpireRef.current(); return }
     const t = setTimeout(() => setRemaining((r) => r - 1), 1000)
     return () => clearTimeout(t)
-  }, [remaining])
+  }, [remaining, running])
 
   const mins = Math.floor(remaining / 60)
   const secs = remaining % 60
@@ -62,20 +77,19 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
   const [currentIdx, setCurrentIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [direction, setDirection] = useState<1 | -1>(1)
+  const [attemptId, setAttemptId] = useState<string | null>(null)
+  const answersRef = useRef(answers)
+  answersRef.current = answers
+  const attemptIdRef = useRef<string | null>(null)
+  attemptIdRef.current = attemptId
+  const phaseRef = useRef<Phase>("loading")
+  phaseRef.current = phase
 
-  const { data, error: fetchError } = useQuery<{ attempted: boolean; attempt_id?: string; test?: TestData }>({
+  // Fetch test data
+  const { data, error: fetchError } = useQuery<{ attempt_count: number; test?: TestData }>({
     queryKey: ["student-test", testId],
     queryFn: () => fetch(`/api/student/tests/${testId}`).then((r) => r.json()),
   })
-
-  useEffect(() => {
-    if (!data) return
-    if (data.attempted) {
-      router.replace(`/student/test/${testId}/results`)
-      return
-    }
-    if (data.test) setPhase("playing")
-  }, [data, testId, router])
 
   const test = data?.test
   const questions = test?.questions ?? []
@@ -83,18 +97,47 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
   const answeredCount = Object.keys(answers).length
   const allAnswered = answeredCount === questions.length
 
+  // Start/resume attempt on server once test data loads
+  useEffect(() => {
+    if (!test) return
+    fetch("/api/tests/attempts/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ test_id: testId }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        setAttemptId(d.attempt_id)
+        if (d.saved_answers && Object.keys(d.saved_answers).length > 0) {
+          setAnswers(d.saved_answers)
+        }
+        setPhase("playing")
+      })
+      .catch(() => setPhase("playing"))
+  }, [test, testId])
+
+  // Heartbeat every 15s while playing
+  useEffect(() => {
+    if (!attemptId || phase !== "playing") return
+    const interval = setInterval(() => {
+      fetch(`/api/tests/attempts/${attemptId}/heartbeat`, { method: "POST" }).catch(() => {})
+    }, 15_000)
+    return () => clearInterval(interval)
+  }, [attemptId, phase])
+
+  // Submit mutation
   const { mutate: submit, isPending: submitting } = useMutation({
     mutationFn: async () => {
       const res = await fetch(`/api/student/tests/${testId}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({ answers: answersRef.current }),
       })
       if (!res.ok) { const { error } = await res.json(); throw new Error(error) }
       return res.json()
     },
-    onSuccess: () => {
-      router.push(`/student/test/${testId}/results`)
+    onSuccess: (result) => {
+      router.push(`/student/test/${testId}/results?attempt=${result.attempt_id}`)
     },
   })
 
@@ -103,8 +146,67 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
     submit()
   }, [submit])
 
+  // beforeunload — send beacon to auto-submit on tab close
+  useEffect(() => {
+    const handler = () => {
+      const aid = attemptIdRef.current
+      const ph = phaseRef.current
+      if (!aid || ph === "submitting") return
+      navigator.sendBeacon(
+        `/api/student/tests/${testId}/submit`,
+        new Blob(
+          [JSON.stringify({ answers: answersRef.current, attempt_id: aid })],
+          { type: "application/json" }
+        )
+      )
+    }
+    window.addEventListener("beforeunload", handler)
+    return () => window.removeEventListener("beforeunload", handler)
+  }, [testId])
+
+  // Inactivity auto-submit
+  const inactivityTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const resetInactivity = useCallback(() => {
+    if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
+    if (phaseRef.current !== "playing") return
+    inactivityTimer.current = setTimeout(() => {
+      setPhase("submitting")
+      submit()
+    }, INACTIVITY_SECONDS * 1000)
+  }, [submit])
+
+  useEffect(() => {
+    if (phase !== "playing") return
+    resetInactivity()
+    const events = ["mousemove", "keydown", "touchstart", "click"]
+    events.forEach((e) => window.addEventListener(e, resetInactivity))
+    return () => {
+      events.forEach((e) => window.removeEventListener(e, resetInactivity))
+      if (inactivityTimer.current) clearTimeout(inactivityTimer.current)
+    }
+  }, [phase, resetInactivity])
+
+  // Pause / resume
+  const handlePause = useCallback(async () => {
+    if (!attemptId) { setPhase("paused"); return }
+    setPhase("paused")
+    fetch(`/api/tests/attempts/${attemptId}/pause`, { method: "POST" }).catch(() => {})
+  }, [attemptId])
+
+  const handleResume = useCallback(async () => {
+    if (!attemptId) { setPhase("playing"); return }
+    const res = await fetch(`/api/tests/attempts/${attemptId}/resume`, { method: "POST" })
+    const data = await res.json()
+    if (data.auto_submitted) {
+      router.push(`/student/test/${testId}/results`)
+      return
+    }
+    setPhase("playing")
+  }, [attemptId, router, testId])
+
   function selectAnswer(questionId: string, label: string) {
     setAnswers((prev) => ({ ...prev, [questionId]: label }))
+    resetInactivity()
   }
 
   function navigate(delta: 1 | -1) {
@@ -119,7 +221,7 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
     setCurrentIdx(idx)
   }
 
-  if (fetchError || (data && !data.test && !data.attempted)) {
+  if (fetchError || (data && !data.test)) {
     return (
       <div className="flex flex-col items-center gap-4 py-20 text-center">
         <AlertCircle className="size-10 text-destructive" />
@@ -135,6 +237,26 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
       <div className="flex flex-col items-center gap-3 py-20">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
         <p className="text-sm text-muted-foreground">Loading test…</p>
+      </div>
+    )
+  }
+
+  if (phase === "paused") {
+    return (
+      <div className="mx-auto max-w-md py-10 space-y-6">
+        <div className="rounded-xl border border-border bg-card p-8 space-y-4 text-center">
+          <Pause className="mx-auto size-10 text-amber-500" />
+          <div>
+            <h2 className="text-lg font-bold">Exam Paused</h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Your progress is saved. Resume when ready.
+            </p>
+          </div>
+          <Button className="w-full gap-2" onClick={handleResume}>
+            <Play className="size-4" />
+            Resume exam
+          </Button>
+        </div>
       </div>
     )
   }
@@ -192,11 +314,33 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
           <p className="truncate font-semibold">{test.title}</p>
           <p className="text-xs text-muted-foreground">
             Question {currentIdx + 1} of {questions.length}
+            {(data?.attempt_count ?? 0) > 0 && (
+              <span className="ml-2 text-amber-600 dark:text-amber-400">
+                · Attempt {(data?.attempt_count ?? 0) + 1}
+              </span>
+            )}
           </p>
         </div>
-        {test.time_limit_min && (
-          <Timer seconds={test.time_limit_min * 60} onExpire={handleExpire} />
-        )}
+        <div className="flex items-center gap-2">
+          {test.allow_pause && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={handlePause}
+            >
+              <Pause className="size-3.5" />
+              Pause
+            </Button>
+          )}
+          {test.time_limit_min && (
+            <Timer
+              seconds={test.time_limit_min * 60}
+              running={phase === "playing"}
+              onExpire={handleExpire}
+            />
+          )}
+        </div>
       </div>
 
       {/* Progress bar */}
@@ -268,19 +412,12 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
         </Button>
 
         {isLast ? (
-          <Button
-            className="gap-2"
-            onClick={() => setPhase("confirming")}
-          >
+          <Button className="gap-2" onClick={() => setPhase("confirming")}>
             <CheckCircle2 className="size-4" />
             {allAnswered ? "Submit" : `Submit (${answeredCount}/${questions.length} answered)`}
           </Button>
         ) : (
-          <Button
-            size="sm"
-            onClick={() => navigate(1)}
-            className="gap-1.5"
-          >
+          <Button size="sm" onClick={() => navigate(1)} className="gap-1.5">
             Next <ChevronRight className="size-4" />
           </Button>
         )}

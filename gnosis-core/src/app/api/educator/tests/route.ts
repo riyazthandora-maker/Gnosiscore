@@ -36,10 +36,11 @@ export async function POST(request: Request) {
     description?: string
     question_ids: string[]
     time_limit_min?: number
+    allow_pause?: boolean
     is_published?: boolean
   }
 
-  const { title, description, question_ids, time_limit_min, is_published } = body
+  const { title, description, question_ids, time_limit_min, allow_pause, is_published } = body
 
   if (!title?.trim()) return NextResponse.json({ error: "title is required." }, { status: 400 })
   if (!Array.isArray(question_ids) || question_ids.length === 0) {
@@ -66,6 +67,7 @@ export async function POST(request: Request) {
       description: description?.trim() ?? null,
       question_ids,
       time_limit_min: time_limit_min ?? null,
+      allow_pause: allow_pause ?? false,
       is_published: is_published ?? false,
     })
     .select()

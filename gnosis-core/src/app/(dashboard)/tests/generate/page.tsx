@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
-import { Sparkles, FileText, AlertTriangle, Loader2, CheckCircle2, Clock } from "lucide-react"
+import { Sparkles, FileText, AlertTriangle, Loader2, CheckCircle2, Clock, Wand2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { Document, Difficulty } from "@/types"
@@ -26,8 +26,25 @@ export default function GeneratePage() {
   const [questionCount, setQuestionCount] = useState(10)
   const [difficulty, setDifficulty] = useState<Difficulty>("medium")
   const [loading, setLoading] = useState(false)
+  const [suggestingName, setSuggestingName] = useState(false)
   const [submitted, setSubmitted] = useState<"completed" | "pending_admin" | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  async function handleSuggestName() {
+    if (selectedDocs.length === 0) return
+    setSuggestingName(true)
+    try {
+      const res = await fetch("/api/educator/questions/suggest-bank-name", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ document_ids: selectedDocs }),
+      })
+      const d = await res.json()
+      if (d.name) setName(d.name)
+    } finally {
+      setSuggestingName(false)
+    }
+  }
 
   const { data: allDocs = [], isLoading: docsLoading } = useQuery<Document[]>({
     queryKey: ["documents"],
@@ -153,12 +170,26 @@ export default function GeneratePage() {
           <label className="text-sm font-semibold">
             Generation name <span className="text-destructive">*</span>
           </label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Chapter 5 — Skeletal System"
-            className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
-          />
+          <div className="flex gap-2">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Chapter 5 — Skeletal System"
+              className="flex-1 rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={selectedDocs.length === 0 || suggestingName}
+              onClick={handleSuggestName}
+              className="gap-1.5 shrink-0"
+              title="Suggest a name based on selected documents"
+            >
+              {suggestingName ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />}
+              Suggest
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground">Used to identify this batch of questions in the test builder.</p>
         </section>
 

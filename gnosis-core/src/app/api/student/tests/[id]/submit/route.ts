@@ -20,26 +20,26 @@ export async function POST(
 
   if (!assignment) return NextResponse.json({ error: "Test not assigned to you." }, { status: 403 })
 
-  // Return existing attempt if already completed
-  const { data: existing } = await supabase
-    .from("test_attempts")
-    .select("id, score, max_score, answers, completed_at")
-    .eq("test_id", testId)
-    .eq("student_id", user.id)
-    .not("completed_at", "is", null)
-    .single()
-
-  if (existing) {
-    const pct = existing.max_score ? Math.round((existing.score / existing.max_score) * 100) : 0
-    return NextResponse.json({ attempt_id: existing.id, score: existing.score, max_score: existing.max_score, pct })
-  }
-
   const { answers } = await request.json() as { answers: Record<string, string> }
   if (!answers || typeof answers !== "object") {
     return NextResponse.json({ error: "answers object is required." }, { status: 400 })
   }
 
-  // Fetch test to get question_ids order
+  // Determine attempt number and whether this is the first
+  const { data: existingAttempts } = await supabase
+    .from("test_attempts")
+    .select("id, attempt_number")
+    .eq("test_id", testId)
+    .eq("student_id", user.id)
+    .not("completed_at", "is", null)
+    .order("attempt_number", { ascending: false })
+    .limit(1)
+
+  const lastAttemptNumber = existingAttempts?.[0]?.attempt_number ?? 0
+  const attemptNumber = lastAttemptNumber + 1
+  const isFirstAttempt = attemptNumber === 1
+
+  // Fetch test
   const { data: test } = await supabase
     .from("tests")
     .select("id, title, question_ids, time_limit_min")
@@ -57,7 +57,7 @@ export async function POST(
 
   if (!questions) return NextResponse.json({ error: "Failed to load questions." }, { status: 500 })
 
-  // Score: count correct answers
+  // Score
   let score = 0
   const graded = (test.question_ids as string[]).map((qid) => {
     const q = questions.find((x) => x.id === qid)
@@ -66,9 +66,7 @@ export async function POST(
     const correctLabel = opts.find((o) => o.is_correct)?.label ?? null
     const studentAnswer = answers[qid] ?? null
     const isCorrect = correctLabel !== null && studentAnswer === correctLabel
-
     if (isCorrect) score++
-
     return {
       id: qid,
       question_text: q.question_text,
@@ -92,6 +90,8 @@ export async function POST(
       answers,
       score,
       max_score: maxScore,
+      attempt_number: attemptNumber,
+      is_first_attempt: isFirstAttempt,
       config_snapshot: { title: test.title, time_limit_min: test.time_limit_min, question_count: maxScore },
       completed_at: new Date().toISOString(),
     })
@@ -106,6 +106,8 @@ export async function POST(
 
   return NextResponse.json({
     attempt_id: attempt.id,
+    attempt_number: attemptNumber,
+    is_first_attempt: isFirstAttempt,
     score,
     max_score: maxScore,
     pct,

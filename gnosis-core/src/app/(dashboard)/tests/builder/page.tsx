@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { useQuery, useMutation } from "@tanstack/react-query"
-import { BookOpen, CheckCircle2, Loader2, Search, Filter } from "lucide-react"
+import { BookOpen, CheckCircle2, Loader2, Search, Filter, Wand2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { Question, Difficulty } from "@/types"
@@ -20,7 +20,25 @@ export default function BuilderPage() {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [timeLimit, setTimeLimit] = useState<string>("")
+  const [allowPause, setAllowPause] = useState(false)
+  const [suggestingName, setSuggestingName] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
+
+  async function handleSuggestName() {
+    if (selected.size === 0) return
+    setSuggestingName(true)
+    try {
+      const res = await fetch("/api/educator/tests/suggest-name", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_ids: Array.from(selected) }),
+      })
+      const d = await res.json()
+      if (d.name) setTitle(d.name)
+    } finally {
+      setSuggestingName(false)
+    }
+  }
 
   const { data, isLoading } = useQuery<{
     questions: (Question & { generation_request_id: string | null })[]
@@ -72,6 +90,7 @@ export default function BuilderPage() {
           description: description.trim() || undefined,
           question_ids: Array.from(selected),
           time_limit_min: timeLimit ? parseInt(timeLimit) : undefined,
+          allow_pause: allowPause,
           is_published: publish,
         }),
       })
@@ -215,12 +234,25 @@ export default function BuilderPage() {
           <div className="space-y-3">
             <div>
               <label className="mb-1.5 block text-xs font-medium">Title *</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="e.g. Chapter 3 Quiz"
-                className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
-              />
+              <div className="flex gap-2">
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Chapter 3 Quiz"
+                  className="flex-1 rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={selected.size === 0 || suggestingName}
+                  onClick={handleSuggestName}
+                  className="shrink-0 px-2"
+                  title="Suggest a name based on selected questions"
+                >
+                  {suggestingName ? <Loader2 className="size-3.5 animate-spin" /> : <Wand2 className="size-3.5" />}
+                </Button>
+              </div>
             </div>
 
             <div>
@@ -245,6 +277,19 @@ export default function BuilderPage() {
                 className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
               />
             </div>
+
+            <label className="flex items-center gap-2.5 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={allowPause}
+                onChange={(e) => setAllowPause(e.target.checked)}
+                className="size-4 rounded border-border accent-primary"
+              />
+              <div>
+                <p className="text-xs font-medium">Allow pause</p>
+                <p className="text-xs text-muted-foreground">Students can pause the exam timer.</p>
+              </div>
+            </label>
           </div>
 
           {formError && (
