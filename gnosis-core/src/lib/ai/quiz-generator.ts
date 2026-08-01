@@ -15,6 +15,7 @@ export interface GeneratedQuestion {
   body: string
   options: { A: string; B: string; C: string; D: string }
   correct: "A" | "B" | "C" | "D"
+  difficulty?: "easy" | "hard"
   explanation: string
   topic: string
 }
@@ -62,23 +63,26 @@ export async function generateQuestions(opts: GenerateOptions): Promise<Generate
   const queryText = topic?.trim() || "important concepts and key facts"
   const embedding = await embedQuery(queryText)
 
-  // 2. RAG: retrieve top-N chunks regardless of similarity score
-  // PostgREST cannot cast a JS number[] to vector(768) automatically — pass as pgvector string.
-  const { data: chunks, error: ragErr } = await supabase.rpc("match_chunks", {
+  // 2. RAG: retrieve top-N chunks scaled to question count
+  const semanticCount = Math.min(questionCount * 3, 80)
+  const { data: semanticChunks, error: ragErr } = await supabase.rpc("match_chunks", {
     query_embedding: `[${embedding.join(",")}]`,
     document_ids: documentIds,
     similarity_threshold: 0,
-    match_count: 20,
+    match_count: semanticCount,
   })
 
   if (ragErr) throw new Error(`RAG search failed: ${ragErr.message}`)
-  if (!chunks || (chunks as unknown[]).length === 0) {
+  if (!semanticChunks || (semanticChunks as unknown[]).length === 0) {
     throw new Error("No content found for this document. Please re-upload and process it.")
   }
 
-  // 3. Build context from retrieved chunks
-  const context = (chunks as { content: string; similarity: number }[])
-    .map((c, i) => `[Excerpt ${i + 1} | relevance ${(c.similarity * 100).toFixed(0)}%]\n${c.content}`)
+  // 3. Merge semantic results with spread-sampled chunks for full coverage
+  const spreadChunks = await spreadSampleChunks(documentIds, Math.min(questionCount, 20), supabase)
+  const combined = mergeChunks(semanticChunks as { content: string }[], spreadChunks)
+
+  const context = combined
+    .map((c, i) => `[Excerpt ${i + 1}]\n${c.content}`)
     .join("\n\n---\n\n")
 
   const topicInstruction = topic?.trim()
@@ -89,7 +93,7 @@ export async function generateQuestions(opts: GenerateOptions): Promise<Generate
   const result = await withRetry(() =>
     genAI.models.generateContent({
       model: QUIZ_MODEL,
-      contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${questionCount} ${difficulty}-level multiple-choice questions from the excerpts above.${topicInstruction}`,
+      contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${questionCount} ${difficulty}-level multiple-choice questions from the excerpts above. Spread questions evenly across all provided excerpts — do not focus on a single section.${topicInstruction}`,
       config: {
         systemInstruction: `You are an expert educational quiz generator. Output ONLY valid JSON — no markdown fences, no extra text.
 
@@ -99,8 +103,9 @@ Schema:
     {
       "body": "question text",
       "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
-      "correct": "A",
-      "explanation": "why A is correct",
+      "correct": "<A|B|C|D>",
+      "difficulty": "<easy|hard>",
+      "explanation": "why the correct answer is right",
       "topic": "concept name"
     }
   ]
@@ -111,11 +116,13 @@ Rules:
 - Base ALL questions strictly on the provided excerpts — never invent facts not present in the excerpts
 - Each question must have exactly 4 options (A, B, C, D) with exactly one correct answer
 - correct must be exactly "A", "B", "C", or "D"
+- Vary the correct answer position — distribute roughly equally across A, B, C, and D across all questions
+- difficulty must be "easy" or "hard" matching the difficulty level of this question
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested`,
         responseMimeType: "application/json",
         maxOutputTokens: Math.min(questionCount * 600, 8000),
-        temperature: 0.7,
+        temperature: 0.9,
         thinkingConfig: { thinkingBudget: 0 },
       },
     })
@@ -136,10 +143,12 @@ Rules:
   return { questions: parsed.questions.slice(0, questionCount), tokensUsed }
 }
 
-function toughnessInstruction(toughness: number): string {
-  if (toughness === 0) return "all questions at easy difficulty (simple recall and recognition)"
-  if (toughness === 100) return "all questions at hard difficulty (analysis and synthesis)"
-  return `mixed difficulty: approximately ${100 - toughness}% easy (recall and recognition) and ${toughness}% hard (analysis and synthesis)`
+function toughnessInstruction(toughness: number, count: number): string {
+  if (toughness === 0) return `all ${count} questions at easy difficulty (simple recall and recognition)`
+  if (toughness === 100) return `all ${count} questions at hard difficulty (analysis and synthesis)`
+  const hardCount = Math.round(count * toughness / 100)
+  const easyCount = count - hardCount
+  return `exactly ${easyCount} easy questions (simple recall and recognition) and exactly ${hardCount} hard questions (analysis and synthesis)`
 }
 
 function toughnessToDifficulty(toughness: number): Difficulty {
@@ -157,8 +166,9 @@ Schema:
     {
       "body": "question text",
       "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
-      "correct": "A",
-      "explanation": "why A is correct",
+      "correct": "<A|B|C|D>",
+      "difficulty": "<easy|hard>",
+      "explanation": "why the correct answer is right",
       "topic": "concept name"
     }
   ]
@@ -168,6 +178,8 @@ Rules:
 - Generate exactly ${count} questions, ${diffInstruction}
 - Each question must have exactly 4 options (A, B, C, D) with exactly one correct answer
 - correct must be exactly "A", "B", "C", or "D"
+- Vary the correct answer position — distribute roughly equally across A, B, C, and D across all questions
+- difficulty must be "easy" or "hard" matching the type assigned to this question
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested`
 }
@@ -184,12 +196,40 @@ function parseQuestions(text: string): GeneratedQuestion[] {
   return parsed.questions
 }
 
+async function spreadSampleChunks(
+  documentIds: string[],
+  sampleCount: number,
+  supabase: SupabaseClient
+): Promise<{ content: string }[]> {
+  const { data } = await supabase
+    .from("document_chunks")
+    .select("content, chunk_index")
+    .in("document_id", documentIds)
+    .order("chunk_index", { ascending: true })
+    .limit(200)
+
+  if (!data || data.length === 0) return []
+  const step = Math.max(1, Math.floor(data.length / sampleCount))
+  const result: { content: string }[] = []
+  for (let i = 0; i < data.length && result.length < sampleCount; i += step) {
+    result.push({ content: data[i].content })
+  }
+  return result
+}
+
+function mergeChunks(
+  semantic: { content: string }[],
+  spread: { content: string }[]
+): { content: string }[] {
+  const seen = new Set(semantic.map((c) => c.content))
+  return [...semantic, ...spread.filter((c) => !seen.has(c.content))]
+}
+
 export async function generateBlended(opts: GenerateBlendedOptions): Promise<GenerateResult> {
   const { chapterDocIds, prompt, promptPct, toughness, questionCount, supabase } = opts
 
   const promptCount = Math.round(questionCount * promptPct / 100)
   const docCount = questionCount - promptCount
-  const diffInstruction = toughnessInstruction(toughness)
 
   let allQuestions: GeneratedQuestion[] = []
   let totalTokens = 0
@@ -199,34 +239,39 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
     const queryText = prompt.trim() || "important concepts and key facts"
     const embedding = await embedQuery(queryText)
 
-    const { data: chunks, error: ragErr } = await supabase.rpc("match_chunks", {
+    const semanticCount = Math.min(docCount * 3, 80)
+    const { data: semanticChunks, error: ragErr } = await supabase.rpc("match_chunks", {
       query_embedding: `[${embedding.join(",")}]`,
       document_ids: chapterDocIds,
       similarity_threshold: 0,
-      match_count: 20,
+      match_count: semanticCount,
     })
 
     if (ragErr) throw new Error(`RAG search failed: ${ragErr.message}`)
-    if (!chunks || (chunks as unknown[]).length === 0) {
+    if (!semanticChunks || (semanticChunks as unknown[]).length === 0) {
       throw new Error(
         "No processed content found in the selected chapters. Ensure all documents have finished processing."
       )
     }
 
-    const context = (chunks as { content: string; similarity: number }[])
+    const spreadChunks = await spreadSampleChunks(chapterDocIds, Math.min(docCount, 20), supabase)
+    const combined = mergeChunks(semanticChunks as { content: string }[], spreadChunks)
+
+    const context = combined
       .map((c, i) => `[Excerpt ${i + 1}]\n${c.content}`)
       .join("\n\n---\n\n")
 
     const focusLine = prompt.trim() ? ` Focus on: "${prompt}".` : ""
+    const diffInstruction = toughnessInstruction(toughness, docCount)
     const result = await withRetry(() =>
       genAI.models.generateContent({
         model: QUIZ_MODEL,
-        contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${docCount} multiple-choice questions from the excerpts above.${focusLine}`,
+        contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${docCount} multiple-choice questions from the excerpts above. Spread questions evenly across all provided excerpts — do not focus on a single section.${focusLine}`,
         config: {
           systemInstruction: buildBlendedSystemPrompt(docCount, diffInstruction),
           responseMimeType: "application/json",
           maxOutputTokens: Math.min(docCount * 600, 8000),
-          temperature: 0.7,
+          temperature: 0.9,
           thinkingConfig: { thinkingBudget: 0 },
         },
       })
@@ -238,6 +283,7 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
 
   // ── Prompt-only questions ───────────────────────────────────────
   if (promptCount > 0 && prompt.trim()) {
+    const diffInstruction = toughnessInstruction(toughness, promptCount)
     const result = await withRetry(() =>
       genAI.models.generateContent({
         model: QUIZ_MODEL,
@@ -246,7 +292,7 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
           systemInstruction: buildBlendedSystemPrompt(promptCount, diffInstruction),
           responseMimeType: "application/json",
           maxOutputTokens: Math.min(promptCount * 600, 8000),
-          temperature: 0.7,
+          temperature: 0.9,
           thinkingConfig: { thinkingBudget: 0 },
         },
       })
@@ -277,8 +323,9 @@ Schema:
     {
       "body": "question text",
       "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
-      "correct": "A",
-      "explanation": "why A is correct",
+      "correct": "<A|B|C|D>",
+      "difficulty": "<easy|hard>",
+      "explanation": "why the correct answer is right",
       "topic": "concept name"
     }
   ]
@@ -288,6 +335,8 @@ Rules:
 - Generate exactly ${questionCount} questions at ${difficulty} difficulty: ${DIFFICULTY_GUIDANCE[difficulty]}
 - Each question must have exactly 4 options (A, B, C, D) with exactly one correct answer
 - correct must be exactly "A", "B", "C", or "D"
+- Vary the correct answer position — distribute roughly equally across A, B, C, and D across all questions
+- difficulty must be "easy" or "hard" matching the difficulty level of this question
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested`,
         responseMimeType: "application/json",
