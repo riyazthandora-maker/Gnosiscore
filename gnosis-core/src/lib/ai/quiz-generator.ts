@@ -60,88 +60,18 @@ export async function embedQuery(text: string): Promise<number[]> {
 export async function generateQuestions(opts: GenerateOptions): Promise<GenerateResult> {
   const { documentIds, difficulty, questionCount, topic, supabase } = opts
 
-  // 1. Embed topic for semantic retrieval
-  const queryText = topic?.trim() || "important concepts and key facts"
-  const embedding = await embedQuery(queryText)
-
-  // 2. RAG: retrieve top-N chunks scaled to question count
-  const semanticCount = Math.min(questionCount * 3, 80)
-  const { data: semanticChunks, error: ragErr } = await supabase.rpc("match_chunks", {
-    query_embedding: `[${embedding.join(",")}]`,
-    document_ids: documentIds,
-    similarity_threshold: 0,
-    match_count: semanticCount,
-  })
-
-  if (ragErr) throw new Error(`RAG search failed: ${ragErr.message}`)
-  if (!semanticChunks || (semanticChunks as unknown[]).length === 0) {
+  const chunks = await fetchAllChunksOrdered(documentIds, supabase)
+  if (chunks.length === 0) {
     throw new Error("No content found for this document. Please re-upload and process it.")
   }
 
-  // 3. Merge semantic results with spread-sampled chunks for full coverage
-  const spreadChunks = await spreadSampleChunks(documentIds, Math.min(questionCount, 20), supabase)
-  const combined = mergeChunks(semanticChunks as { content: string }[], spreadChunks)
+  const easyCount   = difficulty === "easy"   ? questionCount : 0
+  const mediumCount = difficulty === "medium"  ? questionCount : 0
+  const hardCount   = difficulty === "hard"    ? questionCount : 0
+  const focusLine   = topic?.trim() ? ` Focus exclusively on the topic: "${topic}".` : ""
 
-  const context = combined
-    .map((c, i) => `[Excerpt ${i + 1}]\n${c.content}`)
-    .join("\n\n---\n\n")
-
-  const topicInstruction = topic?.trim()
-    ? ` Focus exclusively on the topic: "${topic}".`
-    : ""
-
-  // 4. Generate with Gemini
-  const result = await withRetry(() =>
-    genAI.models.generateContent({
-      model: QUIZ_MODEL,
-      contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${questionCount} ${difficulty}-level multiple-choice questions from the excerpts above. Spread questions evenly across all provided excerpts — do not focus on a single section.${topicInstruction}`,
-      config: {
-        systemInstruction: `You are an expert educational quiz generator. Output ONLY valid JSON — no markdown fences, no extra text.
-
-Schema:
-{
-  "questions": [
-    {
-      "body": "question text",
-      "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
-      "correct": "<A|B|C|D>",
-      "difficulty": "<easy|medium|hard>",
-      "explanation": "why the correct answer is right",
-      "topic": "concept name"
-    }
-  ]
-}
-
-Rules:
-- Generate exactly ${questionCount} questions at ${difficulty} difficulty: ${DIFFICULTY_GUIDANCE[difficulty]}
-- Base ALL questions strictly on the provided excerpts — never invent facts not present in the excerpts
-- Each question must have exactly 4 options (A, B, C, D) with exactly one correct answer
-- correct must be exactly "A", "B", "C", or "D"
-- Vary the correct answer position — distribute roughly equally across A, B, C, and D across all questions
-- difficulty must be "easy" or "hard" matching the difficulty level of this question
-- Explanations: 1-2 sentences, educational
-- topic: short noun phrase identifying the concept tested`,
-        responseMimeType: "application/json",
-        maxOutputTokens: Math.min(questionCount * 600, 8000),
-        temperature: 0.9,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    })
-  )
-
-  const text = result.text ?? ""
-  const tokensUsed = result.usageMetadata?.totalTokenCount ?? 0
-
-  let parsed: { questions: GeneratedQuestion[] }
-  try {
-    parsed = JSON.parse(text)
-  } catch {
-    const cleaned = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "")
-    parsed = JSON.parse(cleaned)
-  }
-
-  if (!Array.isArray(parsed.questions)) throw new Error("Unexpected response structure from AI.")
-  return { questions: parsed.questions.slice(0, questionCount), tokensUsed }
+  return generateFromBatches(chunks, questionCount, easyCount, mediumCount, hardCount, focusLine)
+    .then(({ questions, tokens }) => ({ questions, tokensUsed: tokens }))
 }
 
 function difficultyInstruction(easy: number, medium: number, hard: number): string {
