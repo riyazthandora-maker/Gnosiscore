@@ -51,10 +51,12 @@ function ToughnessSlider({ value, onChange }: { value: number; onChange: (v: num
 function BlendControl({
   value,
   locked,
+  lockMessage,
   onChange,
 }: {
   value: number
   locked: boolean
+  lockMessage?: string
   onChange: (v: number) => void
 }) {
   const docPct = 100 - value
@@ -64,7 +66,7 @@ function BlendControl({
       <div className="flex items-center justify-between">
         <label className="text-sm font-semibold">
           Prompt blend
-          {locked && <span className="ml-2 text-xs text-muted-foreground font-normal">(locked — no chapters selected)</span>}
+          {locked && <span className="ml-2 text-xs text-muted-foreground font-normal">({lockMessage ?? "locked"})</span>}
         </label>
         <span className="text-sm font-bold tabular-nums text-primary">{value}%</span>
       </div>
@@ -116,7 +118,9 @@ export default function GeneratePage() {
   const [error, setError] = useState<string | null>(null)
 
   const hasChapters = selectedChapters.length > 0
+  const hasPrompt = Boolean(prompt.trim())
   const promptLocked = !hasChapters
+  const blendLocked = promptLocked || !hasPrompt
   const needsApproval = questionCount > threshold
 
   // Lock prompt to 100% when no chapters; set default 20% when chapters first selected
@@ -127,6 +131,16 @@ export default function GeneratePage() {
       setPromptPct(20)
     }
   }, [hasChapters]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Force blend to 0 when prompt is cleared; restore default when prompt is first entered
+  useEffect(() => {
+    if (!hasChapters) return
+    if (!hasPrompt) {
+      setPromptPct(0)
+    } else if (promptPct === 0) {
+      setPromptPct(20)
+    }
+  }, [hasPrompt]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch user's chapters
   const { data: chaptersData, isLoading: chaptersLoading } = useQuery<ChaptersResponse>({
@@ -385,7 +399,12 @@ export default function GeneratePage() {
             placeholder="e.g. photosynthesis and light-dependent reactions, quadratic equations…"
             className="w-full rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30 resize-none"
           />
-          <BlendControl value={promptLocked ? 100 : promptPct} locked={promptLocked} onChange={setPromptPct} />
+          <BlendControl
+            value={promptLocked ? 100 : !hasPrompt ? 0 : promptPct}
+            locked={blendLocked}
+            lockMessage={promptLocked ? "locked — no chapters selected" : "locked — enter a prompt to enable"}
+            onChange={setPromptPct}
+          />
           {hasChapters && promptPct === 0 && !prompt.trim() && (
             <div className="flex items-start gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs text-muted-foreground">
               <Info className="size-3.5 mt-0.5 shrink-0" />
