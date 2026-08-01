@@ -8,6 +8,8 @@ interface SendTestCompletedOptions {
   studentName: string
   testTitle: string
   scorePct: number
+  correctCount: number
+  totalQuestions: number
   timeTakenSecs: number
   resultsUrl: string
 }
@@ -25,7 +27,8 @@ function scoreColor(pct: number): string {
 }
 
 function buildHtml(opts: SendTestCompletedOptions): string {
-  const { educatorName, studentName, testTitle, scorePct, timeTakenSecs, resultsUrl } = opts
+  const { educatorName, studentName, testTitle, scorePct, correctCount, totalQuestions, timeTakenSecs, resultsUrl } = opts
+  const passed = scorePct >= 50
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://gnosiscore.ai"
   const color = scoreColor(scorePct)
 
@@ -63,6 +66,18 @@ function buildHtml(opts: SendTestCompletedOptions): string {
                   <tr>
                     <td style="padding:4px 0;font-size:13px;color:#888;">Score</td>
                     <td style="padding:4px 0;font-size:14px;font-weight:700;color:${color};">${scorePct.toFixed(1)}%</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:4px 0;font-size:13px;color:#888;">Correct answers</td>
+                    <td style="padding:4px 0;font-size:13px;font-weight:600;color:#1a1a2e;">${correctCount} / ${totalQuestions}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:4px 0;font-size:13px;color:#888;">Result</td>
+                    <td style="padding:4px 0;">
+                      <span style="display:inline-block;padding:2px 10px;border-radius:6px;font-size:12px;font-weight:700;background:${passed ? "#dcfce7" : "#fee2e2"};color:${passed ? "#15803d" : "#b91c1c"};">
+                        ${passed ? "PASS" : "FAIL"}
+                      </span>
+                    </td>
                   </tr>
                   <tr>
                     <td style="padding:4px 0;font-size:13px;color:#888;">Time taken</td>

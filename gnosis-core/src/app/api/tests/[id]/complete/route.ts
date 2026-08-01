@@ -22,7 +22,7 @@ export async function POST(
     .from("test_attempts")
     .select("*")
     .eq("id", attemptId)
-    .eq("user_id", user.id)
+    .eq("student_id", user.id)
     .single()
 
   if (aErr || !attempt) return NextResponse.json({ error: "Attempt not found." }, { status: 404 })
@@ -90,6 +90,8 @@ export async function POST(
       studentName: studentRes.data.full_name ?? studentRes.data.email ?? "A student",
       testTitle: testRes.data.title,
       scorePct,
+      correctCount: correct,
+      totalQuestions: questions.length,
       timeTakenSecs,
       resultsUrl: `${appUrl}/tests/${attempt.test_id}/analytics`,
     })
