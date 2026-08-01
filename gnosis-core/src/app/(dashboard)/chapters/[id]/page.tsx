@@ -3,7 +3,7 @@
 import { use, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowLeft, FileText, Trash2, Loader2, ChevronLeft, ChevronRight, CheckCircle2, Clock, XCircle, RefreshCw } from "lucide-react"
+import { ArrowLeft, Eye, FileText, Trash2, Loader2, ChevronLeft, ChevronRight, CheckCircle2, Clock, XCircle, RefreshCw, X } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { ChapterUploadZone } from "@/components/chapters/chapter-upload-zone"
@@ -81,9 +81,75 @@ function DeleteDocButton({ chapterId, docId, docName }: { chapterId: string; doc
   )
 }
 
+function MarkdownPreviewModal({
+  chapterId,
+  doc,
+  onClose,
+}: {
+  chapterId: string
+  doc: { id: string; file_name: string }
+  onClose: () => void
+}) {
+  const [content, setContent] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/educator/chapters/${chapterId}/documents/${doc.id}`)
+      .then(async (res) => {
+        if (!res.ok) { const { error: e } = await res.json(); throw new Error(e) }
+        return res.text()
+      })
+      .then(setContent)
+      .catch((e) => setError(e.message))
+  }, [chapterId, doc.id])
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="relative flex w-full max-w-3xl flex-col rounded-2xl border border-border bg-background shadow-2xl"
+        style={{ maxHeight: "85vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-border px-5 py-3.5">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <FileText className="size-4 shrink-0 text-muted-foreground" />
+            <span className="truncate text-sm font-semibold">{doc.file_name}</span>
+            <span className="shrink-0 text-xs text-muted-foreground">— extracted text</span>
+          </div>
+          <button
+            onClick={onClose}
+            className="ml-3 shrink-0 rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+          >
+            <X className="size-4" />
+          </button>
+        </div>
+        <div className="overflow-y-auto px-5 py-4">
+          {!content && !error && (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="size-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+          {error && (
+            <p className="py-10 text-center text-sm text-destructive">{error}</p>
+          )}
+          {content && (
+            <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground/80">
+              {content}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function ChapterDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: chapterId } = use(params)
   const [page, setPage] = useState(1)
+  const [previewDoc, setPreviewDoc] = useState<{ id: string; file_name: string } | null>(null)
   const qc = useQueryClient()
 
   const { data: chapterData } = useQuery<ChapterResponse>({
@@ -131,6 +197,14 @@ export default function ChapterDetailPage({ params }: { params: Promise<{ id: st
 
       <ChapterUploadZone chapterId={chapterId} />
 
+      {previewDoc && (
+        <MarkdownPreviewModal
+          chapterId={chapterId}
+          doc={previewDoc}
+          onClose={() => setPreviewDoc(null)}
+        />
+      )}
+
       {isError ? (
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 py-10 text-center">
           <p className="text-sm text-destructive font-medium">Failed to load documents.</p>
@@ -175,6 +249,15 @@ export default function ChapterDetailPage({ params }: { params: Promise<{ id: st
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
+                    {doc.processing_status === "ready" && (
+                      <button
+                        onClick={() => setPreviewDoc({ id: doc.id, file_name: doc.file_name })}
+                        className="text-muted-foreground hover:text-foreground transition-colors p-1.5 rounded-md hover:bg-muted"
+                        title="Preview extracted text"
+                      >
+                        <Eye className="size-4" />
+                      </button>
+                    )}
                     {doc.processing_status === "failed" && (
                       <button
                         onClick={() => fetch(`/api/documents/${doc.id}/process`, { method: "POST" }).then(() => qc.invalidateQueries({ queryKey: ["chapter-docs", chapterId] }))}

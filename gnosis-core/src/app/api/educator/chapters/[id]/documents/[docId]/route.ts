@@ -17,6 +17,36 @@ async function getEducator(supabase: Awaited<ReturnType<typeof createClient>>) {
   return user
 }
 
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string; docId: string }> }
+) {
+  const { id: chapterId, docId } = await params
+  const supabase = await createClient()
+  const user = await getEducator(supabase)
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+
+  const { data: doc } = await supabase
+    .from("documents")
+    .select("id, owner_id, chapter_id, markdown_path")
+    .eq("id", docId)
+    .single()
+
+  if (!doc) return NextResponse.json({ error: "Not found." }, { status: 404 })
+  if (doc.owner_id !== user.id) return NextResponse.json({ error: "Forbidden." }, { status: 403 })
+  if (doc.chapter_id !== chapterId) return NextResponse.json({ error: "Not found." }, { status: 404 })
+  if (!doc.markdown_path) return NextResponse.json({ error: "Markdown not available." }, { status: 404 })
+
+  const { data: fileData, error: dlErr } = await supabase.storage
+    .from("documents")
+    .download(doc.markdown_path)
+
+  if (dlErr || !fileData) return NextResponse.json({ error: "Failed to fetch markdown." }, { status: 500 })
+
+  const text = await fileData.text()
+  return new NextResponse(text, { headers: { "Content-Type": "text/plain; charset=utf-8" } })
+}
+
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string; docId: string }> }

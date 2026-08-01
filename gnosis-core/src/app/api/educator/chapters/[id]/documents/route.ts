@@ -50,7 +50,7 @@ export async function GET(
 
   const { data, error, count } = await supabase
     .from("documents")
-    .select("id, file_name, total_bytes, processing_status, chunk_count, created_at", { count: "exact" })
+    .select("id, file_name, total_bytes, processing_status, chunk_count, markdown_path, created_at", { count: "exact" })
     .eq("chapter_id", chapterId)
     .order("created_at", { ascending: false })
     .range(from, to)
