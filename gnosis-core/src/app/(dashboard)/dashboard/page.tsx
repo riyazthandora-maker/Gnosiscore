@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
-import { Plus, FileText, BarChart3, Users, BookOpen, CheckCircle2 } from "lucide-react"
+import { Plus, ClipboardList, BarChart3, Users, BookOpen, CheckCircle2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export const metadata: Metadata = { title: "Dashboard — GnosisCore" }
@@ -72,7 +72,7 @@ export default async function DashboardPage() {
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Quick actions</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           {[
-            { href: "/documents", icon: FileText, label: "Upload document", desc: "Add study material" },
+            { href: "/assignments", icon: ClipboardList, label: "Assign test", desc: "Send tests to students" },
             { href: "/tests/generate", icon: Plus, label: "Generate questions", desc: "AI from your documents" },
             { href: "/analytics", icon: BarChart3, label: "View analytics", desc: "Test and student results" },
           ].map(({ href, icon: Icon, label, desc }) => (
