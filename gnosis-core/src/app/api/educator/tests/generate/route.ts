@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { generateBlended, toughnessToDifficulty, embedQuery } from "@/lib/ai/quiz-generator"
+import { generateBlended, embedQuery } from "@/lib/ai/quiz-generator"
 import { getEffectiveQuestionThreshold } from "@/lib/platform-settings"
 import { sendAdminGenerationRequestAlert } from "@/lib/email/send-admin-alert"
 import { NextResponse } from "next/server"
@@ -12,8 +12,9 @@ interface GenerateBody {
   chapter_ids: string[]
   prompt: string
   prompt_pct: number    // 0-100
-  toughness: number     // 0-100
-  question_count: number
+  easy_count: number
+  medium_count: number
+  hard_count: number
 }
 
 async function getEducator(supabase: Awaited<ReturnType<typeof createClient>>) {
@@ -46,8 +47,9 @@ export async function POST(request: Request) {
     chapter_ids = [],
     prompt = "",
     prompt_pct,
-    toughness,
-    question_count,
+    easy_count,
+    medium_count,
+    hard_count,
   } = body
 
   // ── Validation ────────────────────────────────────────────────
@@ -56,6 +58,18 @@ export async function POST(request: Request) {
   }
   if (!Array.isArray(chapter_ids)) {
     return NextResponse.json({ error: "chapter_ids must be an array." }, { status: 400 })
+  }
+
+  const easyCount  = Math.max(0, Math.floor(easy_count ?? 0))
+  const mediumCount = Math.max(0, Math.floor(medium_count ?? 0))
+  const hardCount  = Math.max(0, Math.floor(hard_count ?? 0))
+  const count = easyCount + mediumCount + hardCount
+
+  if (count < 1) {
+    return NextResponse.json({ error: "Total question count must be at least 1." }, { status: 400 })
+  }
+  if (count > 100) {
+    return NextResponse.json({ error: "Total question count cannot exceed 100." }, { status: 400 })
   }
 
   const hasChapters = chapter_ids.length > 0
@@ -69,17 +83,6 @@ export async function POST(request: Request) {
   }
 
   const pct = typeof prompt_pct === "number" ? Math.max(0, Math.min(100, prompt_pct)) : (hasChapters ? 20 : 100)
-  const tough = typeof toughness === "number" ? Math.max(0, Math.min(100, toughness)) : 50
-  const count = typeof question_count === "number" && question_count >= 1 ? Math.min(question_count, 100) : 20
-
-  if (!hasChapters && !hasPrompt) {
-    return NextResponse.json({ error: "A prompt is required when no chapters are selected." }, { status: 400 })
-  }
-
-  // Prompt-only: must have prompt text
-  if (!hasChapters && !hasPrompt) {
-    return NextResponse.json({ error: "Enter a prompt to generate questions from." }, { status: 400 })
-  }
 
   // ── Resolve chapters → document IDs ───────────────────────────
   let chapterDocIds: string[] = []
@@ -150,12 +153,13 @@ export async function POST(request: Request) {
           name: name.trim(),
           question_count: count,
           prompt_pct: pct,
-          toughness: tough,
+          toughness: Math.round(hardCount / count * 100),
           config: {
-            difficulty: toughnessToDifficulty(tough),
             chapter_ids,
             prompt_pct: pct,
-            toughness: tough,
+            easy_count: easyCount,
+            medium_count: mediumCount,
+            hard_count: hardCount,
           },
           status: "pending_admin",
         })
@@ -193,12 +197,13 @@ export async function POST(request: Request) {
         name: name.trim(),
         question_count: count,
         prompt_pct: pct,
-        toughness: tough,
+        toughness: Math.round(hardCount / count * 100),
         config: {
-          difficulty: toughnessToDifficulty(tough),
           chapter_ids,
           prompt_pct: pct,
-          toughness: tough,
+          easy_count: easyCount,
+          medium_count: mediumCount,
+          hard_count: hardCount,
         },
         status: "approved",
       })
@@ -213,12 +218,12 @@ export async function POST(request: Request) {
       chapterDocIds,
       prompt: prompt.trim(),
       promptPct: pct,
-      toughness: tough,
-      questionCount: count,
+      easyCount,
+      mediumCount,
+      hardCount,
       supabase,
     })
 
-    const difficulty = toughnessToDifficulty(tough)
     const rows = questions.map((q) => ({
       owner_id: user.id,
       generation_request_id: genReq.id,
@@ -230,7 +235,7 @@ export async function POST(request: Request) {
         { label: "D", text: q.options.D, is_correct: q.correct === "D" },
       ],
       explanation: q.explanation,
-      difficulty,
+      difficulty: q.difficulty ?? "medium",
       topic_tags: [q.topic],
       status: "pending_review",
     }))

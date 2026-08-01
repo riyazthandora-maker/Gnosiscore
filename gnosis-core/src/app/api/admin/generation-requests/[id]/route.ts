@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { generateQuestions, generateBlended, toughnessToDifficulty } from "@/lib/ai/quiz-generator"
+import { generateQuestions, generateBlended } from "@/lib/ai/quiz-generator"
 import { sendGenerationNotification } from "@/lib/email/send-generation-notification"
 import type { Difficulty } from "@/types"
 import { NextResponse } from "next/server"
@@ -105,12 +105,18 @@ async function runGeneration(
     let questions, tokensUsed
 
     if (isChapterBased) {
+      const cfg = genReq.config ?? {}
+      const total = genReq.question_count
+      const easyCount  = typeof cfg.easy_count   === "number" ? cfg.easy_count   : Math.round(total * 0.6)
+      const hardCount  = typeof cfg.hard_count    === "number" ? cfg.hard_count   : Math.round(total * 0.1)
+      const mediumCount = typeof cfg.medium_count === "number" ? cfg.medium_count : total - easyCount - hardCount
       const result = await generateBlended({
         chapterDocIds: genReq.document_ids,
         prompt: genReq.prompt_context ?? "",
         promptPct: genReq.prompt_pct ?? 0,
-        toughness: genReq.toughness ?? 50,
-        questionCount: genReq.question_count,
+        easyCount,
+        mediumCount,
+        hardCount,
         supabase: adminDb,
       });
       ({ questions, tokensUsed } = result)
@@ -126,10 +132,6 @@ async function runGeneration(
       ({ questions, tokensUsed } = result)
     }
 
-    const difficulty = isChapterBased
-      ? toughnessToDifficulty(genReq.toughness ?? 50)
-      : ((genReq.config?.difficulty as Difficulty) ?? "medium")
-
     const rows = questions.map((q) => ({
       owner_id: genReq.requested_by,
       generation_request_id: genReq.id,
@@ -141,7 +143,7 @@ async function runGeneration(
         { label: "D", text: q.options.D, is_correct: q.correct === "D" },
       ],
       explanation: q.explanation,
-      difficulty,
+      difficulty: q.difficulty ?? ((genReq.config?.difficulty as Difficulty) ?? "medium"),
       topic_tags: [q.topic],
       status: "pending_review",
     }))

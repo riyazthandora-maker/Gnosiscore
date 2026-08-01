@@ -6,8 +6,9 @@ export interface GenerateBlendedOptions {
   chapterDocIds: string[]
   prompt: string
   promptPct: number     // 0-100
-  toughness: number     // 0-100
-  questionCount: number
+  easyCount: number
+  mediumCount: number
+  hardCount: number
   supabase: SupabaseClient
 }
 
@@ -104,7 +105,7 @@ Schema:
       "body": "question text",
       "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
       "correct": "<A|B|C|D>",
-      "difficulty": "<easy|hard>",
+      "difficulty": "<easy|medium|hard>",
       "explanation": "why the correct answer is right",
       "topic": "concept name"
     }
@@ -143,12 +144,22 @@ Rules:
   return { questions: parsed.questions.slice(0, questionCount), tokensUsed }
 }
 
-function toughnessInstruction(toughness: number, count: number): string {
-  if (toughness === 0) return `all ${count} questions at easy difficulty (simple recall and recognition)`
-  if (toughness === 100) return `all ${count} questions at hard difficulty (analysis and synthesis)`
-  const hardCount = Math.round(count * toughness / 100)
-  const easyCount = count - hardCount
-  return `exactly ${easyCount} easy questions (simple recall and recognition) and exactly ${hardCount} hard questions (analysis and synthesis)`
+function difficultyInstruction(easy: number, medium: number, hard: number): string {
+  const parts: string[] = []
+  if (easy > 0)   parts.push(`exactly ${easy} easy (simple recall and recognition)`)
+  if (medium > 0) parts.push(`exactly ${medium} medium (application and interpretation)`)
+  if (hard > 0)   parts.push(`exactly ${hard} hard (analysis and synthesis)`)
+  return parts.join(", ")
+}
+
+function scaleDifficulty(
+  easy: number, medium: number, hard: number,
+  batchCount: number, totalCount: number
+): [number, number, number] {
+  if (totalCount === 0 || batchCount === 0) return [0, 0, 0]
+  const e = Math.round(easy * batchCount / totalCount)
+  const m = Math.round(medium * batchCount / totalCount)
+  return [e, m, Math.max(0, batchCount - e - m)]
 }
 
 function toughnessToDifficulty(toughness: number): Difficulty {
@@ -167,7 +178,7 @@ Schema:
       "body": "question text",
       "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
       "correct": "<A|B|C|D>",
-      "difficulty": "<easy|hard>",
+      "difficulty": "<easy|medium|hard>",
       "explanation": "why the correct answer is right",
       "topic": "concept name"
     }
@@ -179,7 +190,7 @@ Rules:
 - Each question must have exactly 4 options (A, B, C, D) with exactly one correct answer
 - correct must be exactly "A", "B", "C", or "D"
 - Vary the correct answer position — distribute roughly equally across A, B, C, and D across all questions
-- difficulty must be "easy" or "hard" matching the type assigned to this question
+- difficulty must be "easy", "medium", or "hard" matching the type assigned to this question
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested`
 }
@@ -226,10 +237,14 @@ function mergeChunks(
 }
 
 export async function generateBlended(opts: GenerateBlendedOptions): Promise<GenerateResult> {
-  const { chapterDocIds, prompt, promptPct, toughness, questionCount, supabase } = opts
+  const { chapterDocIds, prompt, promptPct, easyCount, mediumCount, hardCount, supabase } = opts
 
-  const promptCount = Math.round(questionCount * promptPct / 100)
-  const docCount = questionCount - promptCount
+  const totalCount = easyCount + mediumCount + hardCount
+  const promptCount = Math.round(totalCount * promptPct / 100)
+  const docCount = totalCount - promptCount
+
+  const [docEasy, docMed, docHard] = scaleDifficulty(easyCount, mediumCount, hardCount, docCount, totalCount)
+  const [prmEasy, prmMed, prmHard] = [easyCount - docEasy, mediumCount - docMed, hardCount - docHard]
 
   let allQuestions: GeneratedQuestion[] = []
   let totalTokens = 0
@@ -262,7 +277,7 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
       .join("\n\n---\n\n")
 
     const focusLine = prompt.trim() ? ` Focus on: "${prompt}".` : ""
-    const diffInstruction = toughnessInstruction(toughness, docCount)
+    const diffInstruction = difficultyInstruction(docEasy, docMed, docHard)
     const result = await withRetry(() =>
       genAI.models.generateContent({
         model: QUIZ_MODEL,
@@ -283,7 +298,7 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
 
   // ── Prompt-only questions ───────────────────────────────────────
   if (promptCount > 0 && prompt.trim()) {
-    const diffInstruction = toughnessInstruction(toughness, promptCount)
+    const diffInstruction = difficultyInstruction(prmEasy, prmMed, prmHard)
     const result = await withRetry(() =>
       genAI.models.generateContent({
         model: QUIZ_MODEL,
@@ -324,7 +339,7 @@ Schema:
       "body": "question text",
       "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
       "correct": "<A|B|C|D>",
-      "difficulty": "<easy|hard>",
+      "difficulty": "<easy|medium|hard>",
       "explanation": "why the correct answer is right",
       "topic": "concept name"
     }

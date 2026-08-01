@@ -16,34 +16,43 @@ interface ChaptersResponse {
   total: number
 }
 
-function ToughnessSlider({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const hardCount = Math.round(value)
-  const easyCount = 100 - hardCount
-  const color = value <= 33 ? "text-green-600 dark:text-green-400"
-    : value <= 66 ? "text-amber-500"
-    : "text-destructive"
+function DifficultyPicker({
+  easy, medium, hard,
+  onEasy, onMedium, onHard,
+}: {
+  easy: number; medium: number; hard: number
+  onEasy: (v: number) => void; onMedium: (v: number) => void; onHard: (v: number) => void
+}) {
+  const total = easy + medium + hard
+  const fields = [
+    { label: "Easy",   value: easy,   onChange: onEasy,   color: "text-green-600 dark:text-green-400", border: "focus:border-green-500" },
+    { label: "Medium", value: medium, onChange: onMedium, color: "text-amber-500",                     border: "focus:border-amber-400" },
+    { label: "Hard",   value: hard,   onChange: onHard,   color: "text-destructive",                   border: "focus:border-destructive" },
+  ]
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-sm font-semibold">Toughness level</label>
-        <span className={cn("text-sm font-bold tabular-nums", color)}>{value}%</span>
+    <div className="space-y-3">
+      <label className="text-sm font-semibold">Question difficulty</label>
+      <div className="grid grid-cols-3 gap-3">
+        {fields.map(({ label, value, onChange, color, border }) => (
+          <div key={label} className="space-y-1.5">
+            <span className={cn("block text-xs font-semibold", color)}>{label}</span>
+            <input
+              type="number"
+              min={0}
+              value={value}
+              onChange={(e) => onChange(Math.max(0, parseInt(e.target.value, 10) || 0))}
+              className={cn(
+                "w-full rounded-xl border border-input bg-background px-3 py-2.5 text-sm text-center outline-none focus:ring-2 focus:ring-ring/30 tabular-nums",
+                border
+              )}
+            />
+          </div>
+        ))}
       </div>
-      <input
-        type="range"
-        min={0}
-        max={100}
-        value={value}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="w-full accent-primary h-2"
-      />
-      <div className="flex justify-between text-xs text-muted-foreground">
-        <span>All easy</span>
-        <span className="text-center">
-          {value === 0 ? "Easy only" : value === 100 ? "Hard only" : `${easyCount}% easy · ${hardCount}% hard`}
-        </span>
-        <span>All hard</span>
-      </div>
+      <p className={cn("text-center text-sm tabular-nums", total === 0 ? "text-muted-foreground" : "font-medium")}>
+        Total: <span className="font-bold">{total}</span> question{total !== 1 ? "s" : ""}
+      </p>
     </div>
   )
 }
@@ -107,8 +116,9 @@ export default function GeneratePage() {
   const [selectedChapters, setSelectedChapters] = useState<string[]>([])
   const [prompt, setPrompt] = useState("")
   const [promptPct, setPromptPct] = useState(100)
-  const [toughness, setToughness] = useState(50)
-  const [questionCount, setQuestionCount] = useState(20)
+  const [easyCount, setEasyCount] = useState(12)
+  const [mediumCount, setMediumCount] = useState(6)
+  const [hardCount, setHardCount] = useState(2)
   const [threshold, setThreshold] = useState(20)
   const [chaptersExpanded, setChaptersExpanded] = useState(true)
 
@@ -121,6 +131,7 @@ export default function GeneratePage() {
   const hasPrompt = Boolean(prompt.trim())
   const promptLocked = !hasChapters
   const blendLocked = promptLocked || !hasPrompt
+  const questionCount = easyCount + mediumCount + hardCount
   const needsApproval = questionCount > threshold
 
   // Lock prompt to 100% when no chapters; set default 20% when chapters first selected
@@ -201,6 +212,10 @@ export default function GeneratePage() {
       setError("Select at least one chapter or enter a custom prompt.")
       return
     }
+    if (questionCount === 0) {
+      setError("Add at least one question across Easy, Medium, or Hard.")
+      return
+    }
 
     setError(null)
     setLoading(true)
@@ -214,8 +229,9 @@ export default function GeneratePage() {
           chapter_ids: selectedChapters,
           prompt: prompt.trim(),
           prompt_pct: promptLocked ? 100 : promptPct,
-          toughness,
-          question_count: questionCount,
+          easy_count: easyCount,
+          medium_count: mediumCount,
+          hard_count: hardCount,
         }),
       })
 
@@ -413,26 +429,13 @@ export default function GeneratePage() {
           )}
         </section>
 
-        {/* ── 4. Toughness Slider ──────────────────────────────────── */}
-        <section>
-          <ToughnessSlider value={toughness} onChange={setToughness} />
-        </section>
-
-        {/* ── 5. Question Count ────────────────────────────────────── */}
-        <section className="space-y-2">
-          <label className="text-sm font-semibold">Number of questions</label>
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              min={1}
-              max={100}
-              value={questionCount}
-              onChange={(e) => setQuestionCount(Math.max(1, Math.min(100, parseInt(e.target.value, 10) || 1)))}
-              className="w-28 rounded-xl border border-input bg-background px-4 py-2.5 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30 tabular-nums text-right"
-            />
-            <span className="text-sm text-muted-foreground">questions</span>
-          </div>
-          {needsApproval && (
+        {/* ── 4. Difficulty Picker ─────────────────────────────────── */}
+        <section className="space-y-3">
+          <DifficultyPicker
+            easy={easyCount} medium={mediumCount} hard={hardCount}
+            onEasy={setEasyCount} onMedium={setMediumCount} onHard={setHardCount}
+          />
+          {needsApproval && questionCount > 0 && (
             <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
               <AlertTriangle className="size-3.5 shrink-0" />
               Requests over {threshold} questions require admin approval before generation runs.
