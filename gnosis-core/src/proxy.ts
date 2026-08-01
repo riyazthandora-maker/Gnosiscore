@@ -18,7 +18,7 @@ function isAllowedForRole(path: string, role: UserRole): boolean {
   return ROLE_ROUTES[role].some((prefix) => path === prefix || path.startsWith(prefix + "/"))
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
