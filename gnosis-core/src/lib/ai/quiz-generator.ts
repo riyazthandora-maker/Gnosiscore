@@ -2,6 +2,15 @@ import { genAI, QUIZ_MODEL, withRetry } from "@/lib/ai/gemini"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Difficulty } from "@/types"
 
+export interface GenerateBlendedOptions {
+  chapterDocIds: string[]
+  prompt: string
+  promptPct: number     // 0-100
+  toughness: number     // 0-100
+  questionCount: number
+  supabase: SupabaseClient
+}
+
 export interface GeneratedQuestion {
   body: string
   options: { A: string; B: string; C: string; D: string }
@@ -126,6 +135,131 @@ Rules:
   if (!Array.isArray(parsed.questions)) throw new Error("Unexpected response structure from AI.")
   return { questions: parsed.questions.slice(0, questionCount), tokensUsed }
 }
+
+function toughnessInstruction(toughness: number): string {
+  if (toughness === 0) return "all questions at easy difficulty (simple recall and recognition)"
+  if (toughness === 100) return "all questions at hard difficulty (analysis and synthesis)"
+  return `mixed difficulty: approximately ${100 - toughness}% easy (recall and recognition) and ${toughness}% hard (analysis and synthesis)`
+}
+
+function toughnessToDifficulty(toughness: number): Difficulty {
+  if (toughness < 34) return "easy"
+  if (toughness >= 67) return "hard"
+  return "medium"
+}
+
+function buildBlendedSystemPrompt(count: number, diffInstruction: string): string {
+  return `You are an expert educational quiz generator. Output ONLY valid JSON — no markdown fences, no extra text.
+
+Schema:
+{
+  "questions": [
+    {
+      "body": "question text",
+      "options": { "A": "...", "B": "...", "C": "...", "D": "..." },
+      "correct": "A",
+      "explanation": "why A is correct",
+      "topic": "concept name"
+    }
+  ]
+}
+
+Rules:
+- Generate exactly ${count} questions, ${diffInstruction}
+- Each question must have exactly 4 options (A, B, C, D) with exactly one correct answer
+- correct must be exactly "A", "B", "C", or "D"
+- Explanations: 1-2 sentences, educational
+- topic: short noun phrase identifying the concept tested`
+}
+
+function parseQuestions(text: string): GeneratedQuestion[] {
+  let parsed: { questions: GeneratedQuestion[] }
+  try {
+    parsed = JSON.parse(text)
+  } catch {
+    const cleaned = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "")
+    parsed = JSON.parse(cleaned)
+  }
+  if (!Array.isArray(parsed.questions)) throw new Error("Unexpected response structure from AI.")
+  return parsed.questions
+}
+
+export async function generateBlended(opts: GenerateBlendedOptions): Promise<GenerateResult> {
+  const { chapterDocIds, prompt, promptPct, toughness, questionCount, supabase } = opts
+
+  const promptCount = Math.round(questionCount * promptPct / 100)
+  const docCount = questionCount - promptCount
+  const diffInstruction = toughnessInstruction(toughness)
+
+  let allQuestions: GeneratedQuestion[] = []
+  let totalTokens = 0
+
+  // ── Document-sourced questions via RAG ─────────────────────────
+  if (docCount > 0 && chapterDocIds.length > 0) {
+    const queryText = prompt.trim() || "important concepts and key facts"
+    const embedding = await embedQuery(queryText)
+
+    const { data: chunks, error: ragErr } = await supabase.rpc("match_chunks", {
+      query_embedding: `[${embedding.join(",")}]`,
+      document_ids: chapterDocIds,
+      similarity_threshold: 0,
+      match_count: 20,
+    })
+
+    if (ragErr) throw new Error(`RAG search failed: ${ragErr.message}`)
+    if (!chunks || (chunks as unknown[]).length === 0) {
+      throw new Error(
+        "No processed content found in the selected chapters. Ensure all documents have finished processing."
+      )
+    }
+
+    const context = (chunks as { content: string; similarity: number }[])
+      .map((c, i) => `[Excerpt ${i + 1}]\n${c.content}`)
+      .join("\n\n---\n\n")
+
+    const focusLine = prompt.trim() ? ` Focus on: "${prompt}".` : ""
+    const result = await withRetry(() =>
+      genAI.models.generateContent({
+        model: QUIZ_MODEL,
+        contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${docCount} multiple-choice questions from the excerpts above.${focusLine}`,
+        config: {
+          systemInstruction: buildBlendedSystemPrompt(docCount, diffInstruction),
+          responseMimeType: "application/json",
+          maxOutputTokens: Math.min(docCount * 600, 8000),
+          temperature: 0.7,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      })
+    )
+
+    allQuestions = [...allQuestions, ...parseQuestions(result.text ?? "").slice(0, docCount)]
+    totalTokens += result.usageMetadata?.totalTokenCount ?? 0
+  }
+
+  // ── Prompt-only questions ───────────────────────────────────────
+  if (promptCount > 0 && prompt.trim()) {
+    const result = await withRetry(() =>
+      genAI.models.generateContent({
+        model: QUIZ_MODEL,
+        contents: `Generate exactly ${promptCount} multiple-choice questions about:\n\n${prompt}`,
+        config: {
+          systemInstruction: buildBlendedSystemPrompt(promptCount, diffInstruction),
+          responseMimeType: "application/json",
+          maxOutputTokens: Math.min(promptCount * 600, 8000),
+          temperature: 0.7,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      })
+    )
+
+    allQuestions = [...allQuestions, ...parseQuestions(result.text ?? "").slice(0, promptCount)]
+    totalTokens += result.usageMetadata?.totalTokenCount ?? 0
+  }
+
+  return { questions: allQuestions.slice(0, questionCount), tokensUsed: totalTokens }
+}
+
+export { toughnessToDifficulty }
 
 export async function generateQuestionsFromPrompt(opts: GenerateFromPromptOptions): Promise<GenerateResult> {
   const { prompt, difficulty, questionCount } = opts

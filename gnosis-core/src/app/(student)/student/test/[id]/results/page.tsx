@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
-import { CheckCircle2, XCircle, BookOpen, ArrowLeft } from "lucide-react"
+import { CheckCircle2, XCircle, ArrowLeft, EyeOff } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface GradedOption {
@@ -56,18 +56,28 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
 
-  // Verify there's a completed attempt
   const { data: attempt } = await supabase
     .from("test_attempts")
     .select("id, score, max_score, answers, completed_at, config_snapshot")
     .eq("test_id", testId)
     .eq("student_id", user.id)
     .not("completed_at", "is", null)
+    .order("completed_at", { ascending: false })
+    .limit(1)
     .single()
 
   if (!attempt) redirect(`/student/test/${testId}`)
 
-  // Fetch test + questions with full detail (correct answers + explanations)
+  // Fetch assignment settings for show_answer_key
+  const { data: assignment } = await supabase
+    .from("test_assignments")
+    .select("show_answer_key")
+    .eq("test_id", testId)
+    .eq("student_id", user.id)
+    .single()
+
+  const showAnswerKey = assignment?.show_answer_key !== false
+
   const { data: test } = await supabase
     .from("tests")
     .select("id, title, question_ids")
@@ -76,43 +86,47 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
 
   if (!test) redirect("/student")
 
-  const { data: questions } = await supabase
-    .from("questions")
-    .select("id, question_text, options, explanation, difficulty, topic_tags")
-    .in("id", test.question_ids)
-    .eq("status", "approved")
-
-  const studentAnswers = (attempt.answers ?? {}) as Record<string, string>
-
-  const graded: GradedQuestion[] = (test.question_ids as string[])
-    .map((qid) => {
-      const q = questions?.find((x) => x.id === qid)
-      if (!q) return null
-      const opts = q.options as GradedOption[]
-      const correctLabel = opts.find((o) => o.is_correct)?.label ?? null
-      const studentAnswer = studentAnswers[qid] ?? null
-      return {
-        id: qid,
-        question_text: q.question_text,
-        options: opts,
-        explanation: q.explanation,
-        difficulty: q.difficulty,
-        topic_tags: q.topic_tags,
-        student_answer: studentAnswer,
-        correct_answer: correctLabel,
-        is_correct: correctLabel !== null && studentAnswer === correctLabel,
-      }
-    })
-    .filter(Boolean) as GradedQuestion[]
-
   const score = attempt.score ?? 0
-  const maxScore = attempt.max_score ?? graded.length
+  const maxScore = attempt.max_score ?? 0
   const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
   const completedAt = attempt.completed_at
     ? new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" }).format(new Date(attempt.completed_at))
     : null
 
   const passLabel = pct >= 80 ? "Excellent" : pct >= 60 ? "Good" : pct >= 40 ? "Fair" : "Needs work"
+
+  // Only fetch question details if answer key is visible
+  let graded: GradedQuestion[] = []
+  if (showAnswerKey) {
+    const { data: questions } = await supabase
+      .from("questions")
+      .select("id, question_text, options, explanation, difficulty, topic_tags")
+      .in("id", test.question_ids)
+      .eq("status", "approved")
+
+    const studentAnswers = (attempt.answers ?? {}) as Record<string, string>
+
+    graded = (test.question_ids as string[])
+      .map((qid) => {
+        const q = questions?.find((x) => x.id === qid)
+        if (!q) return null
+        const opts = q.options as GradedOption[]
+        const correctLabel = opts.find((o) => o.is_correct)?.label ?? null
+        const studentAnswer = studentAnswers[qid] ?? null
+        return {
+          id: qid,
+          question_text: q.question_text,
+          options: opts,
+          explanation: q.explanation,
+          difficulty: q.difficulty,
+          topic_tags: q.topic_tags,
+          student_answer: studentAnswer,
+          correct_answer: correctLabel,
+          is_correct: correctLabel !== null && studentAnswer === correctLabel,
+        }
+      })
+      .filter(Boolean) as GradedQuestion[]
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-8 py-4">
@@ -131,87 +145,96 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {/* Answer key hidden notice */}
+      {!showAnswerKey && (
+        <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-5 py-4">
+          <EyeOff className="size-5 text-muted-foreground shrink-0" />
+          <p className="text-sm text-muted-foreground">
+            Your teacher has hidden the answer key for this test.
+          </p>
+        </div>
+      )}
+
       {/* Per-question breakdown */}
-      <section className="space-y-3">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-          Question breakdown
-        </h2>
+      {showAnswerKey && graded.length > 0 && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+            Question breakdown
+          </h2>
 
-        {graded.map((q, idx) => (
-          <div
-            key={q.id}
-            className={cn(
-              "rounded-xl border bg-card overflow-hidden",
-              q.is_correct ? "border-green-500/30" : "border-destructive/30"
-            )}
-          >
-            {/* Question header */}
-            <div className={cn(
-              "flex items-start gap-3 px-5 py-4",
-              q.is_correct ? "bg-green-500/5" : "bg-destructive/5"
-            )}>
-              {q.is_correct
-                ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-500" />
-                : <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" />}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium">
-                  <span className="text-muted-foreground mr-2">{idx + 1}.</span>
-                  {q.question_text}
-                </p>
+          {graded.map((q, idx) => (
+            <div
+              key={q.id}
+              className={cn(
+                "rounded-xl border bg-card overflow-hidden",
+                q.is_correct ? "border-green-500/30" : "border-destructive/30"
+              )}
+            >
+              <div className={cn(
+                "flex items-start gap-3 px-5 py-4",
+                q.is_correct ? "bg-green-500/5" : "bg-destructive/5"
+              )}>
+                {q.is_correct
+                  ? <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-green-500" />
+                  : <XCircle className="mt-0.5 size-4 shrink-0 text-destructive" />}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">
+                    <span className="text-muted-foreground mr-2">{idx + 1}.</span>
+                    {q.question_text}
+                  </p>
+                </div>
               </div>
-            </div>
 
-            {/* Options */}
-            <div className="px-5 py-4 space-y-2">
-              {q.options.map((opt) => {
-                const isStudentPick = q.student_answer === opt.label
-                const isCorrect = opt.is_correct
-                return (
-                  <div
-                    key={opt.label}
-                    className={cn(
-                      "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm",
-                      isCorrect
-                        ? "bg-green-500/10 text-green-800 dark:text-green-300 font-medium"
-                        : isStudentPick && !isCorrect
-                        ? "bg-destructive/10 text-destructive line-through"
-                        : "bg-muted/50 text-muted-foreground"
-                    )}
-                  >
-                    <span className={cn(
-                      "flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                      isCorrect
-                        ? "bg-green-500 text-white"
-                        : isStudentPick && !isCorrect
-                        ? "bg-destructive text-white"
-                        : "bg-muted text-muted-foreground"
-                    )}>
-                      {opt.label}
-                    </span>
-                    <span>{opt.text}</span>
-                    {isStudentPick && !isCorrect && (
-                      <span className="ml-auto shrink-0 text-xs text-destructive">Your answer</span>
-                    )}
-                    {isCorrect && (
-                      <span className="ml-auto shrink-0 text-xs text-green-600 dark:text-green-400">Correct</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Explanation */}
-            {q.explanation && (
-              <div className="border-t border-border bg-muted/20 px-5 py-3">
-                <p className="text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">Explanation: </span>
-                  {q.explanation}
-                </p>
+              <div className="px-5 py-4 space-y-2">
+                {q.options.map((opt) => {
+                  const isStudentPick = q.student_answer === opt.label
+                  const isCorrect = opt.is_correct
+                  return (
+                    <div
+                      key={opt.label}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm",
+                        isCorrect
+                          ? "bg-green-500/10 text-green-800 dark:text-green-300 font-medium"
+                          : isStudentPick && !isCorrect
+                          ? "bg-destructive/10 text-destructive line-through"
+                          : "bg-muted/50 text-muted-foreground"
+                      )}
+                    >
+                      <span className={cn(
+                        "flex size-5 shrink-0 items-center justify-center rounded-full text-xs font-bold",
+                        isCorrect
+                          ? "bg-green-500 text-white"
+                          : isStudentPick && !isCorrect
+                          ? "bg-destructive text-white"
+                          : "bg-muted text-muted-foreground"
+                      )}>
+                        {opt.label}
+                      </span>
+                      <span>{opt.text}</span>
+                      {isStudentPick && !isCorrect && (
+                        <span className="ml-auto shrink-0 text-xs text-destructive">Your answer</span>
+                      )}
+                      {isCorrect && (
+                        <span className="ml-auto shrink-0 text-xs text-green-600 dark:text-green-400">Correct</span>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
-            )}
-          </div>
-        ))}
-      </section>
+
+              {q.explanation && (
+                <div className="border-t border-border bg-muted/20 px-5 py-3">
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Explanation: </span>
+                    {q.explanation}
+                  </p>
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
 
       <div className="flex justify-center pb-6">
         <Link

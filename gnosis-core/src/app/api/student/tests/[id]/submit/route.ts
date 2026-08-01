@@ -10,15 +10,28 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // Verify assignment
+  // Verify assignment and fetch policies
   const { data: assignment } = await supabase
     .from("test_assignments")
-    .select("id")
+    .select("id, allow_retake")
     .eq("test_id", testId)
     .eq("student_id", user.id)
     .single()
 
   if (!assignment) return NextResponse.json({ error: "Test not assigned to you." }, { status: 403 })
+
+  // Enforce single-attempt policy on submit
+  if (!assignment.allow_retake) {
+    const { count } = await supabase
+      .from("test_attempts")
+      .select("id", { count: "exact", head: true })
+      .eq("test_id", testId)
+      .eq("student_id", user.id)
+      .not("completed_at", "is", null)
+    if ((count ?? 0) > 0) {
+      return NextResponse.json({ error: "Retakes are not allowed for this test." }, { status: 403 })
+    }
+  }
 
   const { answers } = await request.json() as { answers: Record<string, string> }
   if (!answers || typeof answers !== "object") {

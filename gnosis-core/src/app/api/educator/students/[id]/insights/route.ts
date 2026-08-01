@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import { genAI, DIAGNOSTIC_MODEL, withRetry } from "@/lib/ai/gemini"
 
@@ -29,8 +30,9 @@ export async function GET(
 
   if (!link) return NextResponse.json({ error: "Student not linked to your account." }, { status: 403 })
 
-  // Fetch student profile
-  const { data: student } = await supabase
+  // Fetch student profile via admin client — RLS blocks educators from reading other users' rows
+  const adminDb = createAdminClient()
+  const { data: student } = await adminDb
     .from("users")
     .select("id, full_name, email")
     .eq("id", studentId)

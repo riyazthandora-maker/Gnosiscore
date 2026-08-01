@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
-import { Clock, CheckCircle2, BookOpen, AlertTriangle } from "lucide-react"
+import { Clock, CheckCircle2, BookOpen, AlertTriangle, Calendar } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export const metadata: Metadata = { title: "My Tests — GnosisCore" }
@@ -23,10 +23,10 @@ function ScoreBar({ pct }: { pct: number }) {
   )
 }
 
-function dueSoon(dueAt: string | null) {
-  if (!dueAt) return false
-  const msLeft = new Date(dueAt).getTime() - Date.now()
-  return msLeft > 0 && msLeft < 48 * 60 * 60 * 1000 // within 48 hours
+function dueSoon(endsAt: string | null) {
+  if (!endsAt) return false
+  const msLeft = new Date(endsAt).getTime() - Date.now()
+  return msLeft > 0 && msLeft < 48 * 60 * 60 * 1000
 }
 
 export default async function StudentPage() {
@@ -35,7 +35,7 @@ export default async function StudentPage() {
 
   const { data: assignments } = await supabase
     .from("test_assignments")
-    .select("*, tests(title, description, time_limit_min, is_published, question_ids)")
+    .select("*, tests(title, description, is_published, question_ids)")
     .eq("student_id", user!.id)
     .order("assigned_at", { ascending: false })
 
@@ -46,11 +46,21 @@ export default async function StudentPage() {
     .not("completed_at", "is", null)
 
   const attemptMap = new Map(attempts?.map((a) => [a.test_id, a]) ?? [])
+  const now = new Date()
 
-  const pending = assignments?.filter(
-    (a) => (a.tests as { is_published: boolean }).is_published && !attemptMap.has(a.test_id)
-  ) ?? []
-  const completed = assignments?.filter((a) => attemptMap.has(a.test_id)) ?? []
+  const pending = (assignments ?? []).filter((a) => {
+    const test = a.tests as { is_published: boolean } | null
+    if (!test?.is_published) return false
+    // Filter by scheduling window
+    if (a.starts_at && new Date(a.starts_at) > now) return false
+    if (a.ends_at && new Date(a.ends_at) < now) return false
+    const hasAttempt = attemptMap.has(a.test_id)
+    if (!hasAttempt) return true
+    // Allow re-entry if retakes are allowed
+    return a.allow_retake === true
+  })
+
+  const completed = (assignments ?? []).filter((a) => attemptMap.has(a.test_id))
 
   return (
     <div className="space-y-8">
@@ -72,8 +82,9 @@ export default async function StudentPage() {
           </div>
         ) : (
           pending.map((a) => {
-            const test = a.tests as { title: string; description: string | null; time_limit_min: number | null; question_ids: string[] }
-            const urgent = dueSoon(a.due_at)
+            const test = a.tests as { title: string; description: string | null; question_ids: string[] }
+            const urgent = dueSoon(a.ends_at)
+            const isRetake = attemptMap.has(a.test_id)
             return (
               <Link
                 key={a.id}
@@ -91,24 +102,25 @@ export default async function StudentPage() {
                     )}
                     <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <span>{test.question_ids.length} questions</span>
-                      {test.time_limit_min && (
+                      {a.time_limit_minutes > 0 && (
                         <span className="flex items-center gap-1">
-                          <Clock className="size-3" />{test.time_limit_min} min
+                          <Clock className="size-3" />{a.time_limit_minutes} min
                         </span>
                       )}
-                      {a.due_at && (
+                      {a.ends_at && (
                         <span className={cn(
                           "flex items-center gap-1",
                           urgent ? "text-amber-600 dark:text-amber-400 font-medium" : ""
                         )}>
                           {urgent && <AlertTriangle className="size-3" />}
-                          Due {new Date(a.due_at).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" })}
+                          <Calendar className="size-3" />
+                          Due {new Date(a.ends_at).toLocaleDateString("en", { month: "short", day: "numeric", year: "numeric" })}
                         </span>
                       )}
                     </div>
                   </div>
                   <div className="shrink-0 rounded-lg bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary">
-                    Start →
+                    {isRetake ? "Retake →" : "Start →"}
                   </div>
                 </div>
               </Link>

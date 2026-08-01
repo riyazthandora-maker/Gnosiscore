@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { BarChart3, BookOpen, FileText, LayoutDashboard, LogOut, Menu, Settings, X } from "lucide-react"
+import { BarChart3, BookOpen, ClipboardList, FileText, FolderOpen, LayoutDashboard, LogOut, Menu, Settings, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/shared/theme-toggle"
@@ -11,8 +11,10 @@ import { createClient } from "@/lib/supabase/client"
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/chapters", label: "Chapters", icon: FolderOpen },
   { href: "/documents", label: "Documents", icon: FileText },
   { href: "/tests", label: "Tests", icon: BookOpen },
+  { href: "/assignments", label: "Assignments", icon: ClipboardList },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ]

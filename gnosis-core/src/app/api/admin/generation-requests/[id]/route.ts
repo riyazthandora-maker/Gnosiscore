@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
-import { generateQuestions } from "@/lib/ai/quiz-generator"
+import { generateQuestions, generateBlended, toughnessToDifficulty } from "@/lib/ai/quiz-generator"
 import { sendGenerationNotification } from "@/lib/email/send-generation-notification"
 import type { Difficulty } from "@/types"
 import { NextResponse } from "next/server"
@@ -30,7 +30,7 @@ export async function PATCH(
 
   const { data: genReq, error: fetchErr } = await adminDb
     .from("generation_requests")
-    .select("id, requested_by, status, document_ids, question_count, config, prompt_context, name")
+    .select("id, requested_by, status, document_ids, chapter_ids, question_count, prompt_pct, toughness, config, prompt_context, name")
     .eq("id", id)
     .single()
 
@@ -89,7 +89,10 @@ async function runGeneration(
     id: string
     requested_by: string
     document_ids: string[]
+    chapter_ids: string[]
     question_count: number
+    prompt_pct: number
+    toughness: number
     config: Record<string, unknown>
     prompt_context: string | null
     name: string
@@ -97,16 +100,35 @@ async function runGeneration(
   adminDb: ReturnType<typeof createAdminClient>
 ) {
   try {
-    const difficulty = (genReq.config?.difficulty as Difficulty) ?? "medium"
-    const topic = genReq.prompt_context ?? undefined
+    const isChapterBased = Array.isArray(genReq.chapter_ids) && genReq.chapter_ids.length > 0
 
-    const { questions, tokensUsed } = await generateQuestions({
-      documentIds: genReq.document_ids,
-      difficulty,
-      questionCount: genReq.question_count,
-      topic,
-      supabase: adminDb,
-    })
+    let questions, tokensUsed
+
+    if (isChapterBased) {
+      const result = await generateBlended({
+        chapterDocIds: genReq.document_ids,
+        prompt: genReq.prompt_context ?? "",
+        promptPct: genReq.prompt_pct ?? 0,
+        toughness: genReq.toughness ?? 50,
+        questionCount: genReq.question_count,
+        supabase: adminDb,
+      });
+      ({ questions, tokensUsed } = result)
+    } else {
+      const difficulty = (genReq.config?.difficulty as Difficulty) ?? "medium"
+      const result = await generateQuestions({
+        documentIds: genReq.document_ids,
+        difficulty,
+        questionCount: genReq.question_count,
+        topic: genReq.prompt_context ?? undefined,
+        supabase: adminDb,
+      });
+      ({ questions, tokensUsed } = result)
+    }
+
+    const difficulty = isChapterBased
+      ? toughnessToDifficulty(genReq.toughness ?? 50)
+      : ((genReq.config?.difficulty as Difficulty) ?? "medium")
 
     const rows = questions.map((q) => ({
       owner_id: genReq.requested_by,
@@ -124,7 +146,22 @@ async function runGeneration(
       status: "pending_review",
     }))
 
-    await adminDb.from("questions").insert(rows)
+    const { data: insertedQs } = await adminDb.from("questions").insert(rows).select("id")
+    const questionIds = (insertedQs ?? []).map((q) => q.id)
+
+    // Create a draft test for the review screen
+    const { data: draftTest } = await adminDb
+      .from("tests")
+      .insert({
+        creator_id: genReq.requested_by,
+        title: genReq.name || "Generated Test",
+        question_ids: questionIds,
+        is_published: false,
+      })
+      .select("id")
+      .single()
+
+    const testId = draftTest?.id
 
     await Promise.all([
       adminDb
@@ -135,14 +172,16 @@ async function runGeneration(
     ])
 
     // Notify educator that questions are ready to review
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://gnosiscore.ai"
+    const reviewUrl = testId ? `${appUrl}/tests/${testId}/review` : `${appUrl}/tests/review`
+
     await adminDb.from("notifications").insert({
       user_id: genReq.requested_by,
       type: "questions_ready",
-      payload: { request_id: genReq.id, count: rows.length },
+      payload: { request_id: genReq.id, test_id: testId ?? null, count: rows.length },
     })
 
     // Email educator — fire-and-forget
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://gnosiscore.ai"
     Promise.resolve(
       adminDb.from("users").select("email, full_name").eq("id", genReq.requested_by).single()
     ).then(({ data: educator }) => {
@@ -153,7 +192,7 @@ async function runGeneration(
         generationName: genReq.name || "your request",
         questionCount: rows.length,
         type: "questions_ready",
-        reviewUrl: `${appUrl}/tests/review`,
+        reviewUrl,
       })
     }).catch((err: Error) => console.error("[admin-generate] questions_ready email failed:", err?.message))
   } catch (err) {

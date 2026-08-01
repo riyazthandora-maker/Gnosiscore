@@ -104,6 +104,12 @@ export interface TestAssignment {
   student_id: string
   assigned_by: string
   due_at: string | null
+  time_limit_minutes: number
+  show_timer: boolean
+  show_answer_key: boolean
+  allow_retake: boolean
+  starts_at: string | null
+  ends_at: string | null
   assigned_at: string
 }
 
@@ -155,6 +161,25 @@ export type Toughness = Difficulty | 'advanced'
 export type ShowAnswerMode = 'immediate' | 'end' | 'hidden'
 export type ConfigSnapshot = Record<string, unknown>
 export type TestConfig = Record<string, unknown>
+
+export interface Chapter {
+  id: string
+  user_id: string
+  name: string
+  created_at: string
+}
+
+export interface ChapterWithStats extends Chapter {
+  doc_count: number
+  storage_bytes: number
+}
+
+export interface EffectiveLimits {
+  doc_size_limit_bytes: number
+  max_docs_per_chapter: number
+  storage_limit_bytes: number
+  monthly_upload_limit: number
+}
 
 export const FILE_LIMITS = {
   perFile: 4 * 1024 * 1024,        // 4 MB

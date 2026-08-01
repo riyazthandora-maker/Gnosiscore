@@ -26,6 +26,7 @@ interface TestData {
   question_ids: string[]
   time_limit_min: number | null
   allow_pause: boolean
+  show_timer: boolean
   due_at: string | null
   questions: QuizQuestion[]
 }
@@ -333,7 +334,7 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
               Pause
             </Button>
           )}
-          {test.time_limit_min && (
+          {test.time_limit_min && test.show_timer !== false && (
             <Timer
               seconds={test.time_limit_min * 60}
               running={phase === "playing"}

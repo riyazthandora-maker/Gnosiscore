@@ -9,6 +9,9 @@ interface PlatformSettings {
   file_size_limit_bytes: number
   question_approval_threshold: number
   max_pause_duration_seconds: number
+  max_storage_bytes: number
+  max_docs_per_chapter: number
+  monthly_upload_limit: number
   updated_at: string
 }
 
@@ -55,6 +58,9 @@ export default function AdminSettingsPage() {
   const [fileSizeMB, setFileSizeMB] = useState("")
   const [threshold, setThreshold] = useState("")
   const [pauseMin, setPauseMin] = useState("")
+  const [storageMB, setStorageMB] = useState("")
+  const [maxDocs, setMaxDocs] = useState("")
+  const [monthlyUploads, setMonthlyUploads] = useState("")
   const [loaded, setLoaded] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -72,6 +78,9 @@ export default function AdminSettingsPage() {
       setFileSizeMB(String(settingsData.settings.file_size_limit_bytes / 1024 / 1024))
       setThreshold(String(settingsData.settings.question_approval_threshold))
       setPauseMin(String(Math.round(settingsData.settings.max_pause_duration_seconds / 60)))
+      setStorageMB(String(settingsData.settings.max_storage_bytes / 1024 / 1024))
+      setMaxDocs(String(settingsData.settings.max_docs_per_chapter))
+      setMonthlyUploads(String(settingsData.settings.monthly_upload_limit))
       setLoaded(true)
     }
   }, [settingsData, loaded])
@@ -85,6 +94,9 @@ export default function AdminSettingsPage() {
           file_size_limit_bytes: Math.round(parseFloat(fileSizeMB) * 1024 * 1024),
           question_approval_threshold: parseInt(threshold, 10),
           max_pause_duration_seconds: parseInt(pauseMin, 10) * 60,
+          max_storage_bytes: Math.round(parseFloat(storageMB) * 1024 * 1024),
+          max_docs_per_chapter: parseInt(maxDocs, 10),
+          monthly_upload_limit: parseInt(monthlyUploads, 10),
         }),
       })
       if (!res.ok) { const { error } = await res.json(); throw new Error(error) }
@@ -149,6 +161,31 @@ export default function AdminSettingsPage() {
           onChange={setPauseMin}
           min={1}
           unit="minutes"
+        />
+        <SettingRow
+          label="Total storage per teacher"
+          description="Maximum cumulative storage for chapter documents per educator."
+          value={storageMB}
+          onChange={setStorageMB}
+          min={1}
+          step={10}
+          unit="MB"
+        />
+        <SettingRow
+          label="Max docs per chapter"
+          description="Maximum number of documents allowed in a single chapter."
+          value={maxDocs}
+          onChange={setMaxDocs}
+          min={1}
+          unit="docs"
+        />
+        <SettingRow
+          label="Monthly upload limit"
+          description="Maximum number of document uploads per educator per calendar month."
+          value={monthlyUploads}
+          onChange={setMonthlyUploads}
+          min={1}
+          unit="uploads"
         />
       </div>
 

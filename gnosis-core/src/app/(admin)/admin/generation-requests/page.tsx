@@ -15,6 +15,9 @@ interface GenRequest {
   question_count: number
   prompt_context: string | null
   config: Record<string, unknown>
+  chapter_ids: string[]
+  prompt_pct: number
+  toughness: number
   status: GenStatus
   admin_note: string | null
   created_at: string
@@ -202,18 +205,17 @@ export default function GenerationRequestsPage() {
                       By: {req.users?.full_name ?? "Unknown"} ({req.users?.email})
                     </p>
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                      {Boolean(req.config?.difficulty) && <span>Difficulty: {String(req.config.difficulty)}</span>}
+                      {Array.isArray(req.chapter_ids) && req.chapter_ids.length > 0 ? (
+                        <span>{req.chapter_ids.length} chapter(s) · {req.prompt_pct ?? 0}% prompt · {req.toughness ?? 50}% toughness</span>
+                      ) : Boolean(req.config?.difficulty) ? (
+                        <span>Difficulty: {String(req.config.difficulty)}</span>
+                      ) : null}
                       {req.prompt_context && (
-                        <span className="truncate max-w-xs">Topic: {req.prompt_context}</span>
+                        <span className="truncate max-w-xs">Prompt: {req.prompt_context}</span>
                       )}
                       <span>Submitted: {formatDate(req.created_at)}</span>
                       {req.reviewed_at && <span>Reviewed: {formatDate(req.reviewed_at)}</span>}
                     </div>
-                    {Array.isArray(req.config?.document_ids) && (
-                      <p className="text-xs text-muted-foreground">
-                        {(req.config.document_ids as string[]).length} document(s) selected
-                      </p>
-                    )}
                   </div>
                   <ActionButtons
                     req={req}

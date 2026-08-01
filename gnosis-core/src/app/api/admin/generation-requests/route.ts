@@ -15,7 +15,7 @@ export async function GET(request: Request) {
   let query = supabase
     .from("generation_requests")
     .select(`
-      id, question_count, prompt_context, config, status, admin_note, created_at, reviewed_at,
+      id, question_count, prompt_context, config, chapter_ids, prompt_pct, toughness, status, admin_note, created_at, reviewed_at,
       users!generation_requests_requested_by_fkey(full_name, email)
     `)
     .order("created_at", { ascending: false })

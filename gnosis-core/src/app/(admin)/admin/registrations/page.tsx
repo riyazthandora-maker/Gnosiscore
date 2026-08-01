@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
-import { CheckCircle2, XCircle, Clock, UserCheck, Loader2, Pencil, X, Power } from "lucide-react"
+import { CheckCircle2, XCircle, Clock, UserCheck, Loader2, Pencil, X, Power, HardDrive } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -120,6 +120,204 @@ function TokenCapEditor({ userId, tokenCap, tokensUsed }: {
               autoFocus
             />
           </div>
+          <Button size="sm" className="h-7 px-2.5 text-xs" disabled={isPending} onClick={handleSave}>
+            {isPending ? <Loader2 className="size-3 animate-spin" /> : "Save"}
+          </Button>
+          <button onClick={() => setEditing(false)} className="text-muted-foreground hover:text-foreground">
+            <X className="size-4" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StorageLimitsEditor({ userId }: { userId: string }) {
+  const qc = useQueryClient()
+  const [open, setOpen] = useState(false)
+  const [storageMB, setStorageMB] = useState("")
+  const [docSizeMB, setDocSizeMB] = useState("")
+  const [maxDocs, setMaxDocs] = useState("")
+  const [monthlyLimit, setMonthlyLimit] = useState("")
+  const [loaded, setLoaded] = useState(false)
+
+  const { data, isLoading } = useQuery<{ limits: {
+    storage_limit_bytes: number | null
+    doc_size_limit_bytes: number | null
+    max_docs_per_chapter: number | null
+    monthly_upload_limit: number | null
+  } }>({
+    queryKey: ["storage-limits", userId],
+    queryFn: async () => {
+      const res = await fetch(`/api/admin/users/${userId}/storage-limits`)
+      if (!res.ok) throw new Error(`${res.status}`)
+      return res.json()
+    },
+    enabled: open,
+  })
+
+  useEffect(() => {
+    if (data && !loaded) {
+      const l = data.limits
+      setStorageMB(l.storage_limit_bytes != null ? String(l.storage_limit_bytes / 1024 / 1024) : "")
+      setDocSizeMB(l.doc_size_limit_bytes != null ? String(l.doc_size_limit_bytes / 1024 / 1024) : "")
+      setMaxDocs(l.max_docs_per_chapter != null ? String(l.max_docs_per_chapter) : "")
+      setMonthlyLimit(l.monthly_upload_limit != null ? String(l.monthly_upload_limit) : "")
+      setLoaded(true)
+    }
+  }, [data, loaded])
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: async () => {
+      const toNullableBytes = (v: string) => v.trim() === "" ? null : Math.round(parseFloat(v) * 1024 * 1024)
+      const toNullableInt = (v: string) => v.trim() === "" ? null : parseInt(v, 10)
+      const res = await fetch(`/api/admin/users/${userId}/storage-limits`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          storage_limit_bytes: toNullableBytes(storageMB),
+          doc_size_limit_bytes: toNullableBytes(docSizeMB),
+          max_docs_per_chapter: toNullableInt(maxDocs),
+          monthly_upload_limit: toNullableInt(monthlyLimit),
+        }),
+      })
+      if (!res.ok) { const { error } = await res.json(); throw new Error(error) }
+      return res.json()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["storage-limits", userId] })
+      setLoaded(false)
+      setOpen(false)
+    },
+  })
+
+  return (
+    <div className="mt-3 pt-3 border-t border-border/50">
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <HardDrive className="size-3" />Storage limits
+        </span>
+        <button
+          onClick={() => { setOpen((o) => !o); setLoaded(false) }}
+          className="text-muted-foreground hover:text-foreground transition-colors"
+          title="Edit storage limits"
+        >
+          <Pencil className="size-3.5" />
+        </button>
+      </div>
+
+      {open && (
+        <div className="mt-3 space-y-2">
+          {isLoading ? (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" /> Loading…
+            </div>
+          ) : (
+            <>
+              {[
+                { label: "Storage limit (MB)", value: storageMB, set: setStorageMB, placeholder: "blank = platform default (200 MB)" },
+                { label: "Doc size limit (MB)", value: docSizeMB, set: setDocSizeMB, placeholder: "blank = platform default (4 MB)" },
+                { label: "Max docs per chapter", value: maxDocs, set: setMaxDocs, placeholder: "blank = platform default (10)" },
+                { label: "Monthly upload limit", value: monthlyLimit, set: setMonthlyLimit, placeholder: "blank = platform default (100)" },
+              ].map(({ label, value, set, placeholder }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground w-36 shrink-0">{label}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={value}
+                    onChange={(e) => set(e.target.value)}
+                    placeholder={placeholder}
+                    className="flex-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                  />
+                </div>
+              ))}
+              <div className="flex gap-2 justify-end pt-1">
+                <Button size="sm" className="h-7 px-2.5 text-xs" disabled={isPending} onClick={() => mutate()}>
+                  {isPending ? <Loader2 className="size-3 animate-spin" /> : "Save"}
+                </Button>
+                <Button variant="ghost" size="sm" className="h-7 px-2.5 text-xs" onClick={() => setOpen(false)}>Cancel</Button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function QuestionThresholdEditor({ userId }: { userId: string }) {
+  const qc = useQueryClient()
+  const [editing, setEditing] = useState(false)
+  const [inputVal, setInputVal] = useState<string>("")
+  const [currentThreshold, setCurrentThreshold] = useState<number | null>(null)
+
+  const { mutate: fetch_, isSuccess } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/admin/users/${userId}/storage-limits`)
+      if (!res.ok) throw new Error(`${res.status}`)
+      return res.json()
+    },
+    onSuccess: () => {},
+  })
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: async (threshold: number | null) => {
+      const res = await fetch(`/api/admin/users/${userId}/question-threshold`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ question_approval_threshold: threshold }),
+      })
+      if (!res.ok) { const { error } = await res.json(); throw new Error(error) }
+      return res.json()
+    },
+    onSuccess: (data) => {
+      setCurrentThreshold(data.question_approval_threshold)
+      qc.invalidateQueries({ queryKey: ["admin-registrations"] })
+      setEditing(false)
+    },
+  })
+
+  const handleSave = () => {
+    const trimmed = inputVal.trim()
+    if (trimmed === "") mutate(null)
+    else {
+      const n = parseInt(trimmed, 10)
+      if (!isNaN(n) && n >= 1) mutate(n)
+    }
+  }
+
+  return (
+    <div className="mt-2 pt-2 border-t border-border/30">
+      {!editing ? (
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground flex-1">
+            Question approval threshold:{" "}
+            <span className="font-medium text-foreground">
+              {currentThreshold != null ? `${currentThreshold} questions` : "platform default"}
+            </span>
+          </span>
+          <button
+            onClick={() => { setInputVal(currentThreshold?.toString() ?? ""); setEditing(true) }}
+            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+            title="Set per-user question threshold"
+          >
+            <Pencil className="size-3.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-muted-foreground shrink-0">Override threshold:</span>
+          <input
+            type="number"
+            min={1}
+            value={inputVal}
+            onChange={(e) => setInputVal(e.target.value)}
+            placeholder="blank = platform default"
+            className="flex-1 rounded-md border border-input bg-background px-2.5 py-1 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+            onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false) }}
+            autoFocus
+          />
           <Button size="sm" className="h-7 px-2.5 text-xs" disabled={isPending} onClick={handleSave}>
             {isPending ? <Loader2 className="size-3 animate-spin" /> : "Save"}
           </Button>
@@ -347,6 +545,8 @@ export default function RegistrationsPage() {
                   </div>
                 </div>
                 <TokenCapEditor userId={u.id} tokenCap={u.token_cap} tokensUsed={u.tokens_used ?? 0} />
+                {u.account_status === "approved" && <StorageLimitsEditor userId={u.id} />}
+                {u.account_status === "approved" && <QuestionThresholdEditor userId={u.id} />}
               </motion.div>
             ))}
           </div>

@@ -12,7 +12,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("platform_settings")
-    .select("file_size_limit_bytes, question_approval_threshold, max_pause_duration_seconds, updated_at")
+    .select("file_size_limit_bytes, question_approval_threshold, max_pause_duration_seconds, max_storage_bytes, max_docs_per_chapter, monthly_upload_limit, updated_at")
     .eq("id", 1)
     .single()
 
@@ -32,6 +32,9 @@ export async function PATCH(request: Request) {
     file_size_limit_bytes?: number
     question_approval_threshold?: number
     max_pause_duration_seconds?: number
+    max_storage_bytes?: number
+    max_docs_per_chapter?: number
+    monthly_upload_limit?: number
   }
 
   const updates: Record<string, number | string> = { updated_at: new Date().toISOString() }
@@ -60,12 +63,36 @@ export async function PATCH(request: Request) {
     updates.max_pause_duration_seconds = v
   }
 
+  if (body.max_storage_bytes !== undefined) {
+    const v = Number(body.max_storage_bytes)
+    if (!Number.isInteger(v) || v < 1024 * 1024) {
+      return NextResponse.json({ error: "max_storage_bytes must be at least 1 MB." }, { status: 400 })
+    }
+    updates.max_storage_bytes = v
+  }
+
+  if (body.max_docs_per_chapter !== undefined) {
+    const v = Number(body.max_docs_per_chapter)
+    if (!Number.isInteger(v) || v < 1) {
+      return NextResponse.json({ error: "max_docs_per_chapter must be at least 1." }, { status: 400 })
+    }
+    updates.max_docs_per_chapter = v
+  }
+
+  if (body.monthly_upload_limit !== undefined) {
+    const v = Number(body.monthly_upload_limit)
+    if (!Number.isInteger(v) || v < 1) {
+      return NextResponse.json({ error: "monthly_upload_limit must be at least 1." }, { status: 400 })
+    }
+    updates.monthly_upload_limit = v
+  }
+
   const adminDb = createAdminClient()
   const { data, error } = await adminDb
     .from("platform_settings")
     .update(updates)
     .eq("id", 1)
-    .select("file_size_limit_bytes, question_approval_threshold, max_pause_duration_seconds, updated_at")
+    .select("file_size_limit_bytes, question_approval_threshold, max_pause_duration_seconds, max_storage_bytes, max_docs_per_chapter, monthly_upload_limit, updated_at")
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
