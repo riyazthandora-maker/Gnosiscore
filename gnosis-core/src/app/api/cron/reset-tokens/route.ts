@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 
-// Called by Vercel Cron every Monday at 00:00 UTC.
+// Called by Vercel Cron on the 1st of every month at 00:00 UTC.
 // Secured with CRON_SECRET so it can't be triggered publicly.
 export async function POST(request: Request) {
   const authHeader = request.headers.get("authorization")
