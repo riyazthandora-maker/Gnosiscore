@@ -16,7 +16,7 @@ export interface GeneratedQuestion {
   body: string
   options: { A: string; B: string; C: string; D: string }
   correct: "A" | "B" | "C" | "D"
-  difficulty?: "easy" | "hard"
+  difficulty?: "easy" | "medium" | "hard"
   explanation: string
   topic: string
 }
@@ -207,9 +207,8 @@ function parseQuestions(text: string): GeneratedQuestion[] {
   return parsed.questions
 }
 
-async function spreadSampleChunks(
+async function fetchAllChunksOrdered(
   documentIds: string[],
-  sampleCount: number,
   supabase: SupabaseClient
 ): Promise<{ content: string }[]> {
   const { data } = await supabase
@@ -217,23 +216,93 @@ async function spreadSampleChunks(
     .select("content, chunk_index")
     .in("document_id", documentIds)
     .order("chunk_index", { ascending: true })
-    .limit(200)
-
-  if (!data || data.length === 0) return []
-  const step = Math.max(1, Math.floor(data.length / sampleCount))
-  const result: { content: string }[] = []
-  for (let i = 0; i < data.length && result.length < sampleCount; i += step) {
-    result.push({ content: data[i].content })
-  }
-  return result
+  return data ?? []
 }
 
-function mergeChunks(
-  semantic: { content: string }[],
-  spread: { content: string }[]
-): { content: string }[] {
-  const seen = new Set(semantic.map((c) => c.content))
-  return [...semantic, ...spread.filter((c) => !seen.has(c.content))]
+function groupChunks(chunks: { content: string }[], groupCount: number): { content: string }[][] {
+  const actual = Math.min(groupCount, chunks.length)
+  const size = Math.ceil(chunks.length / actual)
+  const groups: { content: string }[][] = []
+  for (let i = 0; i < chunks.length; i += size) {
+    groups.push(chunks.slice(i, i + size))
+  }
+  return groups
+}
+
+function allocateQuestions(total: number, groupCount: number): number[] {
+  const base = Math.floor(total / groupCount)
+  const remainder = total % groupCount
+  return Array.from({ length: groupCount }, (_, i) => base + (i < remainder ? 1 : 0))
+}
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const out = [...arr]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
+async function generateFromBatches(
+  chunks: { content: string }[],
+  docCount: number,
+  easy: number,
+  medium: number,
+  hard: number,
+  focusLine: string
+): Promise<{ questions: GeneratedQuestion[]; tokens: number }> {
+  // Aim for ~5 questions per batch, max 10 batches
+  const batchCount = Math.min(Math.ceil(docCount / 5), 10)
+  const groups = groupChunks(chunks, batchCount)
+  const qCounts = allocateQuestions(docCount, groups.length)
+
+  let usedEasy = 0, usedMed = 0
+
+  const batchResults = await Promise.all(
+    groups.map((group, i) => {
+      const q = qCounts[i]
+      const isLast = i === groups.length - 1
+      let bE: number, bM: number, bH: number
+      if (isLast) {
+        bE = Math.max(0, easy - usedEasy)
+        bM = Math.max(0, medium - usedMed)
+        bH = Math.max(0, q - bE - bM)
+      } else {
+        ;[bE, bM, bH] = scaleDifficulty(easy, medium, hard, q, docCount)
+        usedEasy += bE
+        usedMed += bM
+      }
+
+      const context = group
+        .map((c, idx) => `[Excerpt ${idx + 1}]\n${c.content}`)
+        .join("\n\n---\n\n")
+      const diffInstruction = difficultyInstruction(bE, bM, bH)
+
+      return withRetry(() =>
+        genAI.models.generateContent({
+          model: QUIZ_MODEL,
+          contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${q} multiple-choice questions from these excerpts.${focusLine}`,
+          config: {
+            systemInstruction: buildBlendedSystemPrompt(q, diffInstruction),
+            responseMimeType: "application/json",
+            maxOutputTokens: Math.min(q * 600, 4000),
+            temperature: 0.9,
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        })
+      )
+    })
+  )
+
+  let questions: GeneratedQuestion[] = []
+  let tokens = 0
+  for (const result of batchResults) {
+    questions = [...questions, ...parseQuestions(result.text ?? "")]
+    tokens += result.usageMetadata?.totalTokenCount ?? 0
+  }
+
+  return { questions: shuffleArray(questions).slice(0, docCount), tokens }
 }
 
 export async function generateBlended(opts: GenerateBlendedOptions): Promise<GenerateResult> {
@@ -249,51 +318,18 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
   let allQuestions: GeneratedQuestion[] = []
   let totalTokens = 0
 
-  // ── Document-sourced questions via RAG ─────────────────────────
+  // ── Document-sourced questions via batched parallel generation ──
   if (docCount > 0 && chapterDocIds.length > 0) {
-    const queryText = prompt.trim() || "important concepts and key facts"
-    const embedding = await embedQuery(queryText)
-
-    const semanticCount = Math.min(docCount * 3, 80)
-    const { data: semanticChunks, error: ragErr } = await supabase.rpc("match_chunks", {
-      query_embedding: `[${embedding.join(",")}]`,
-      document_ids: chapterDocIds,
-      similarity_threshold: 0,
-      match_count: semanticCount,
-    })
-
-    if (ragErr) throw new Error(`RAG search failed: ${ragErr.message}`)
-    if (!semanticChunks || (semanticChunks as unknown[]).length === 0) {
+    const chunks = await fetchAllChunksOrdered(chapterDocIds, supabase)
+    if (chunks.length === 0) {
       throw new Error(
         "No processed content found in the selected chapters. Ensure all documents have finished processing."
       )
     }
-
-    const spreadChunks = await spreadSampleChunks(chapterDocIds, Math.min(docCount, 20), supabase)
-    const combined = mergeChunks(semanticChunks as { content: string }[], spreadChunks)
-
-    const context = combined
-      .map((c, i) => `[Excerpt ${i + 1}]\n${c.content}`)
-      .join("\n\n---\n\n")
-
     const focusLine = prompt.trim() ? ` Focus on: "${prompt}".` : ""
-    const diffInstruction = difficultyInstruction(docEasy, docMed, docHard)
-    const result = await withRetry(() =>
-      genAI.models.generateContent({
-        model: QUIZ_MODEL,
-        contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${docCount} multiple-choice questions from the excerpts above. Spread questions evenly across all provided excerpts — do not focus on a single section.${focusLine}`,
-        config: {
-          systemInstruction: buildBlendedSystemPrompt(docCount, diffInstruction),
-          responseMimeType: "application/json",
-          maxOutputTokens: Math.min(docCount * 600, 8000),
-          temperature: 0.9,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      })
-    )
-
-    allQuestions = [...allQuestions, ...parseQuestions(result.text ?? "").slice(0, docCount)]
-    totalTokens += result.usageMetadata?.totalTokenCount ?? 0
+    const { questions, tokens } = await generateFromBatches(chunks, docCount, docEasy, docMed, docHard, focusLine)
+    allQuestions = [...allQuestions, ...questions]
+    totalTokens += tokens
   }
 
   // ── Prompt-only questions ───────────────────────────────────────
@@ -317,7 +353,7 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
     totalTokens += result.usageMetadata?.totalTokenCount ?? 0
   }
 
-  return { questions: allQuestions.slice(0, questionCount), tokensUsed: totalTokens }
+  return { questions: allQuestions.slice(0, totalCount), tokensUsed: totalTokens }
 }
 
 export { toughnessToDifficulty }
