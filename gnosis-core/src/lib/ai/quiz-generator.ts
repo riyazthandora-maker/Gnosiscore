@@ -123,16 +123,28 @@ Rules:
 - difficulty must be "easy", "medium", or "hard" matching the type assigned to this question
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested
-- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\int_0^1 f(x)\\,dx$$)`
+- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\\\int_0^1 f(x)\\\\,dx$$). IMPORTANT: because this is JSON, every LaTeX backslash must be doubled — write \\\\leq not \\leq, \\\\frac not \\frac, \\\\geq not \\geq`
+}
+
+function fixLatexBackslashes(raw: string): string {
+  // When the model emits LaTeX inside JSON strings it often forgets to double-escape
+  // backslashes (e.g. \leq instead of \\leq). Fix in two passes:
+  // 1. \b, \f, \n, \r, \t followed by more letters are LaTeX commands (\beta, \frac…)
+  //    not JSON control characters — double-escape them.
+  // 2. Any remaining lone backslash not followed by a valid JSON escape char gets doubled.
+  return raw
+    .replace(/\\([bfnrt])(?=[a-zA-Z])/g, "\\\\$1")
+    .replace(/\\(?!["\\\/bfnrtu\d\s])/g, "\\\\")
 }
 
 function parseQuestions(text: string): GeneratedQuestion[] {
+  const stripped = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim()
   let parsed: { questions: GeneratedQuestion[] }
   try {
-    parsed = JSON.parse(text)
+    parsed = JSON.parse(stripped)
   } catch {
-    const cleaned = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "")
-    parsed = JSON.parse(cleaned)
+    // Retry after fixing unescaped LaTeX backslashes
+    parsed = JSON.parse(fixLatexBackslashes(stripped))
   }
   if (!Array.isArray(parsed.questions)) throw new Error("Unexpected response structure from AI.")
   return parsed.questions
@@ -321,7 +333,7 @@ Rules:
 - difficulty must be "easy" or "hard" matching the difficulty level of this question
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested
-- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\int_0^1 f(x)\\,dx$$)`,
+- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\\\int_0^1 f(x)\\\\,dx$$). IMPORTANT: because this is JSON, every LaTeX backslash must be doubled — write \\\\leq not \\leq, \\\\frac not \\frac, \\\\geq not \\geq`,
         responseMimeType: "application/json",
         maxOutputTokens: Math.min(questionCount * 600, 8000),
         temperature: 0.7,
