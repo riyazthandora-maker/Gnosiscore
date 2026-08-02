@@ -9,6 +9,7 @@ import {
   Loader2, CheckCircle2, Pause, Play,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { MathText } from "@/components/ui/math-text"
 import { cn } from "@/lib/utils"
 
 interface QuizQuestion {
@@ -368,7 +369,7 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
             <span className="mt-0.5 shrink-0 rounded-lg bg-primary/10 px-2.5 py-1 text-sm font-bold text-primary">
               Q{currentIdx + 1}
             </span>
-            <p className="text-base font-medium leading-relaxed">{currentQ.question_text}</p>
+            <MathText className="text-base font-medium leading-relaxed">{currentQ.question_text}</MathText>
           </div>
 
           <div className="space-y-2.5">
@@ -392,7 +393,7 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
                   )}>
                     {opt.label}
                   </span>
-                  <span className="text-sm">{opt.text}</span>
+                  <MathText className="text-sm">{opt.text}</MathText>
                 </button>
               )
             })}

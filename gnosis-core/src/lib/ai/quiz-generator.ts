@@ -122,7 +122,8 @@ Rules:
 - Vary the correct answer position — distribute roughly equally across A, B, C, and D across all questions
 - difficulty must be "easy", "medium", or "hard" matching the type assigned to this question
 - Explanations: 1-2 sentences, educational
-- topic: short noun phrase identifying the concept tested`
+- topic: short noun phrase identifying the concept tested
+- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\int_0^1 f(x)\\,dx$$)`
 }
 
 function parseQuestions(text: string): GeneratedQuestion[] {
@@ -319,7 +320,8 @@ Rules:
 - Vary the correct answer position — distribute roughly equally across A, B, C, and D across all questions
 - difficulty must be "easy" or "hard" matching the difficulty level of this question
 - Explanations: 1-2 sentences, educational
-- topic: short noun phrase identifying the concept tested`,
+- topic: short noun phrase identifying the concept tested
+- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\int_0^1 f(x)\\,dx$$)`,
         responseMimeType: "application/json",
         maxOutputTokens: Math.min(questionCount * 600, 8000),
         temperature: 0.7,

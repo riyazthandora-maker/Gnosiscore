@@ -8,6 +8,7 @@ import {
   CheckCircle2, Trash2, ChevronDown, ChevronUp, Loader2, BookOpen, Flag, AlertTriangle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { MathText } from "@/components/ui/math-text"
 import { cn } from "@/lib/utils"
 import type { QuestionOption } from "@/types"
 
@@ -95,7 +96,7 @@ function QuestionCard({
               {q.difficulty}
             </span>
           )}
-          <p className="truncate text-sm font-medium">{text}</p>
+          <MathText className="truncate text-sm font-medium">{text}</MathText>
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {isDirty && (

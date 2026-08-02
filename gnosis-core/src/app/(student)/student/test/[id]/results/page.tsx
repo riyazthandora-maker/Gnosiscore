@@ -2,6 +2,7 @@ import { redirect } from "next/navigation"
 import Link from "next/link"
 import { createClient } from "@/lib/supabase/server"
 import { CheckCircle2, XCircle, ArrowLeft, EyeOff } from "lucide-react"
+import { MathText } from "@/components/ui/math-text"
 import { cn } from "@/lib/utils"
 
 interface GradedOption {
@@ -180,7 +181,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">
                     <span className="text-muted-foreground mr-2">{idx + 1}.</span>
-                    {q.question_text}
+                    <MathText>{q.question_text}</MathText>
                   </p>
                 </div>
               </div>
@@ -211,7 +212,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                       )}>
                         {opt.label}
                       </span>
-                      <span>{opt.text}</span>
+                      <MathText>{opt.text}</MathText>
                       {isStudentPick && !isCorrect && (
                         <span className="ml-auto shrink-0 text-xs text-destructive">Your answer</span>
                       )}
@@ -227,7 +228,7 @@ export default async function ResultsPage({ params }: { params: Promise<{ id: st
                 <div className="border-t border-border bg-muted/20 px-5 py-3">
                   <p className="text-xs text-muted-foreground">
                     <span className="font-medium text-foreground">Explanation: </span>
-                    {q.explanation}
+                    <MathText>{q.explanation}</MathText>
                   </p>
                 </div>
               )}
