@@ -90,7 +90,14 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
   // Fetch test data
   const { data, error: fetchError } = useQuery<{ attempt_count: number; test?: TestData }>({
     queryKey: ["student-test", testId],
-    queryFn: () => fetch(`/api/student/tests/${testId}`).then((r) => r.json()),
+    queryFn: async () => {
+      const res = await fetch(`/api/student/tests/${testId}`)
+      if (res.status === 401) {
+        router.replace(`/login?redirectTo=/student/test/${testId}`)
+        return { attempt_count: 0 }
+      }
+      return res.json()
+    },
   })
 
   const test = data?.test

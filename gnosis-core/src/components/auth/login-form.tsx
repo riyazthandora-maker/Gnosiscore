@@ -10,7 +10,7 @@ import { roleHomePath } from "@/types"
 
 type Step = "email" | "otp"
 
-export function LoginForm() {
+export function LoginForm({ redirectTo }: { redirectTo?: string }) {
   const router = useRouter()
   const [step, setStep] = useState<Step>("email")
   const [email, setEmail] = useState("")
@@ -23,7 +23,12 @@ export function LoginForm() {
   async function redirectByRole(supabase: ReturnType<typeof createClient>) {
     const { data: { user } } = await supabase.auth.getUser()
     const role = (user?.user_metadata?.role ?? "student") as UserRole
-    router.push(roleHomePath(role))
+    // Use redirectTo if it's a safe same-site path, otherwise fall back to role home
+    const destination =
+      redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//")
+        ? redirectTo
+        : roleHomePath(role)
+    router.push(destination)
     router.refresh()
   }
 
