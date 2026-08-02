@@ -127,14 +127,67 @@ Rules:
 }
 
 function fixLatexBackslashes(raw: string): string {
-  // When the model emits LaTeX inside JSON strings it often forgets to double-escape
-  // backslashes (e.g. \leq instead of \\leq). Fix in two passes:
-  // 1. \b, \f, \n, \r, \t followed by more letters are LaTeX commands (\beta, \frac…)
-  //    not JSON control characters — double-escape them.
-  // 2. Any remaining lone backslash not followed by a valid JSON escape char gets doubled.
-  return raw
-    .replace(/\\([bfnrt])(?=[a-zA-Z])/g, "\\\\$1")
-    .replace(/\\(?!["\\\/bfnrtu\d\s])/g, "\\\\")
+  // Walk the raw JSON character-by-character. Inside string values, any backslash
+  // not forming a valid JSON escape sequence is doubled. This correctly handles:
+  //   \leq → \\leq, \frac → \\frac, \beta → \\beta
+  // while preserving real JSON escapes like \n, \t, \", \\, \uXXXX.
+  // The ambiguous cases (\b, \f, \n, \r, \t) are treated as LaTeX when followed
+  // by a letter (\beta, \frac, \neq, \right, \theta) and as JSON escapes otherwise.
+  let out = ""
+  let i = 0
+  let inString = false
+
+  while (i < raw.length) {
+    const ch = raw[i]
+
+    if (!inString) {
+      out += ch
+      if (ch === '"') inString = true
+      i++
+      continue
+    }
+
+    if (ch === '"') {
+      out += ch
+      inString = false
+      i++
+      continue
+    }
+
+    if (ch !== "\\") {
+      out += ch
+      i++
+      continue
+    }
+
+    // ch === "\\"
+    const next = raw[i + 1] ?? ""
+    const afterNext = raw[i + 2] ?? ""
+
+    if (next === '"' || next === "\\" || next === "/" ) {
+      // Always-safe JSON escapes — keep as-is
+      out += ch + next
+      i += 2
+    } else if ("bfnrt".includes(next) && /[a-zA-Z]/.test(afterNext)) {
+      // \b/\f/\n/\r/\t followed by a letter → LaTeX command, not control char
+      out += "\\\\"
+      i++
+    } else if ("bfnrt".includes(next)) {
+      // \b/\f/\n/\r/\t not followed by a letter → real JSON control char
+      out += ch + next
+      i += 2
+    } else if (next === "u" && /^[0-9a-fA-F]{4}$/.test(raw.slice(i + 2, i + 6))) {
+      // Valid \uXXXX unicode escape — keep all 6 chars
+      out += raw.slice(i, i + 6)
+      i += 6
+    } else {
+      // Everything else (\leq, \geq, \alpha, \{, \}, \u without 4 hex, etc.) — double
+      out += "\\\\"
+      i++
+    }
+  }
+
+  return out
 }
 
 function parseQuestions(text: string): GeneratedQuestion[] {
