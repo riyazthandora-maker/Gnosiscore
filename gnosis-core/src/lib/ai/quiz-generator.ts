@@ -240,7 +240,7 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
   const { chapterDocIds, prompt, promptPct, easyCount, mediumCount, hardCount, supabase } = opts
 
   const totalCount = easyCount + mediumCount + hardCount
-  const promptCount = Math.round(totalCount * promptPct / 100)
+  const promptCount = prompt.trim() ? Math.round(totalCount * promptPct / 100) : 0
   const docCount = totalCount - promptCount
 
   const [docEasy, docMed, docHard] = scaleDifficulty(easyCount, mediumCount, hardCount, docCount, totalCount)
