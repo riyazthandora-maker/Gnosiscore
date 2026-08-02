@@ -69,9 +69,12 @@ export async function POST(request: Request) {
 
   await Promise.allSettled(
     pending.map(async (assignment) => {
-      const student = assignment.students as { email: string; full_name: string | null } | null
-      const educator = assignment.educators as { full_name: string | null } | null
-      const test = assignment.tests as { title: string } | null
+      const studentRaw = assignment.students as unknown as { email: string; full_name: string | null }[] | null
+      const educatorRaw = assignment.educators as unknown as { full_name: string | null }[] | null
+      const testRaw = assignment.tests as unknown as { title: string }[] | null
+      const student = Array.isArray(studentRaw) ? studentRaw[0] : studentRaw
+      const educator = Array.isArray(educatorRaw) ? educatorRaw[0] : educatorRaw
+      const test = Array.isArray(testRaw) ? testRaw[0] : testRaw
 
       if (!student?.email || !test?.title) return
 
