@@ -1,4 +1,4 @@
-import { genAI, QUIZ_MODEL, withRetry } from "@/lib/ai/gemini"
+import { genAI, callGemini, QUIZ_MODEL, withRetry } from "@/lib/ai/gemini"
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Difficulty } from "@/types"
 
@@ -304,15 +304,12 @@ async function generateFromBatches(
       const diffInstruction = difficultyInstruction(bE, bM, bH)
 
       return withRetry(() =>
-        genAI.models.generateContent({
+        callGemini({
           model: QUIZ_MODEL,
+          systemInstruction: buildBlendedSystemPrompt(q, diffInstruction),
           contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${q} multiple-choice questions from these excerpts.${focusLine}`,
-          config: {
-            systemInstruction: buildBlendedSystemPrompt(q, diffInstruction),
-            maxOutputTokens: Math.min(q * 600, 4000),
-            temperature: 0.9,
-            thinkingConfig: { thinkingBudget: 0 },
-          },
+          maxOutputTokens: Math.min(q * 600, 4000),
+          temperature: 0.9,
         })
       )
     })
@@ -321,8 +318,8 @@ async function generateFromBatches(
   let questions: GeneratedQuestion[] = []
   let tokens = 0
   for (const result of batchResults) {
-    questions = [...questions, ...parseQuestions(result.text ?? "")]
-    tokens += result.usageMetadata?.totalTokenCount ?? 0
+    questions = [...questions, ...parseQuestions(result.text)]
+    tokens += result.totalTokenCount
   }
 
   return { questions: shuffleArray(questions).slice(0, docCount), tokens }
@@ -359,20 +356,17 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
   if (promptCount > 0 && prompt.trim()) {
     const diffInstruction = difficultyInstruction(prmEasy, prmMed, prmHard)
     const result = await withRetry(() =>
-      genAI.models.generateContent({
+      callGemini({
         model: QUIZ_MODEL,
+        systemInstruction: buildBlendedSystemPrompt(promptCount, diffInstruction),
         contents: `Generate exactly ${promptCount} multiple-choice questions about:\n\n${prompt}`,
-        config: {
-          systemInstruction: buildBlendedSystemPrompt(promptCount, diffInstruction),
-          maxOutputTokens: Math.min(promptCount * 600, 8000),
-          temperature: 0.9,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
+        maxOutputTokens: Math.min(promptCount * 600, 8000),
+        temperature: 0.9,
       })
     )
 
-    allQuestions = [...allQuestions, ...parseQuestions(result.text ?? "").slice(0, promptCount)]
-    totalTokens += result.usageMetadata?.totalTokenCount ?? 0
+    allQuestions = [...allQuestions, ...parseQuestions(result.text).slice(0, promptCount)]
+    totalTokens += result.totalTokenCount
   }
 
   return { questions: allQuestions.slice(0, totalCount), tokensUsed: totalTokens }
@@ -384,11 +378,9 @@ export async function generateQuestionsFromPrompt(opts: GenerateFromPromptOption
   const { prompt, difficulty, questionCount } = opts
 
   const result = await withRetry(() =>
-    genAI.models.generateContent({
+    callGemini({
       model: QUIZ_MODEL,
-      contents: `Generate exactly ${questionCount} ${difficulty}-level multiple-choice questions about:\n\n${prompt}`,
-      config: {
-        systemInstruction: `You are an expert educational quiz generator. Output ONLY valid JSON — no markdown fences, no extra text.
+      systemInstruction: `You are an expert educational quiz generator. Output ONLY valid JSON — no markdown fences, no extra text.
 
 Schema:
 {
@@ -414,15 +406,14 @@ Rules:
 - topic: short noun phrase identifying the concept tested
 - For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\\\int_0^1 f(x)\\\\,dx$$). IMPORTANT: because this is JSON, every LaTeX backslash must be doubled — write \\\\leq not \\leq, \\\\frac not \\frac, \\\\geq not \\geq
 - CRITICAL JSON RULE: Every string value must be on a single line. Do NOT embed literal newline, tab, carriage-return, or any other control character (ASCII 0-31) inside any JSON string. Use a space instead of a line break within string values.`,
-        maxOutputTokens: Math.min(questionCount * 600, 8000),
-        temperature: 0.7,
-        thinkingConfig: { thinkingBudget: 0 },
-      },
+      contents: `Generate exactly ${questionCount} ${difficulty}-level multiple-choice questions about:\n\n${prompt}`,
+      maxOutputTokens: Math.min(questionCount * 600, 8000),
+      temperature: 0.7,
     })
   )
 
-  const text = result.text ?? ""
-  const tokensUsed = result.usageMetadata?.totalTokenCount ?? 0
+  const text = result.text
+  const tokensUsed = result.totalTokenCount
 
   let parsed: { questions: GeneratedQuestion[] }
   try {
