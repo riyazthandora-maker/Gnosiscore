@@ -155,7 +155,16 @@ function fixLatexBackslashes(raw: string): string {
     }
 
     if (ch !== "\\") {
-      out += ch
+      const code = ch.charCodeAt(0)
+      if (code < 0x20) {
+        // Literal control character inside a JSON string — must be escaped
+        const escMap: Record<number, string> = {
+          0x08: "\\b", 0x09: "\\t", 0x0A: "\\n", 0x0C: "\\f", 0x0D: "\\r",
+        }
+        out += escMap[code] ?? `\\u${code.toString(16).padStart(4, "0")}`
+      } else {
+        out += ch
+      }
       i++
       continue
     }
@@ -403,7 +412,7 @@ Rules:
     parsed = JSON.parse(text)
   } catch {
     const cleaned = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "")
-    parsed = JSON.parse(cleaned)
+    parsed = JSON.parse(fixLatexBackslashes(cleaned))
   }
 
   if (!Array.isArray(parsed.questions)) throw new Error("Unexpected response structure from AI.")

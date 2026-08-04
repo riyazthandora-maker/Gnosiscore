@@ -77,13 +77,24 @@ export async function POST(
     adminDb.from("tests").select("title, creator_id").eq("id", attempt.test_id).single(),
     adminDb.from("users").select("full_name, email").eq("id", user.id).single(),
   ]).then(async ([testRes, studentRes]) => {
-    if (!testRes.data || !studentRes.data) return
-    const { data: educatorRes } = await adminDb
+    if (testRes.error || !testRes.data) {
+      console.error("[complete] failed to fetch test:", testRes.error?.message)
+      return
+    }
+    if (studentRes.error || !studentRes.data) {
+      console.error("[complete] failed to fetch student:", studentRes.error?.message)
+      return
+    }
+    const { data: educatorRes, error: eduErr } = await adminDb
       .from("users")
       .select("email, full_name")
       .eq("id", testRes.data.creator_id)
       .single()
-    if (!educatorRes) return
+    if (eduErr || !educatorRes) {
+      console.error("[complete] failed to fetch educator:", eduErr?.message)
+      return
+    }
+    console.log(`[complete] sending completion email to ${educatorRes.email}`)
     return sendTestCompletedEmail({
       educatorEmail: educatorRes.email,
       educatorName: educatorRes.full_name ?? "Educator",
@@ -95,7 +106,7 @@ export async function POST(
       timeTakenSecs,
       resultsUrl: `${appUrl}/tests/${attempt.test_id}/analytics`,
     })
-  }).catch((err) => console.error("[complete] email failed:", err?.message))
+  }).catch((err) => console.error("[complete] email failed:", err))
 
   return NextResponse.json({ attempt_id: attemptId, score_pct: scorePct })
 }

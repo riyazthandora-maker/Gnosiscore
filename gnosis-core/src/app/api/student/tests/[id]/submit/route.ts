@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
+import { sendTestCompletedEmail } from "@/lib/email/send-test-completed"
 import { NextResponse } from "next/server"
 
 export async function POST(
@@ -116,6 +118,48 @@ export async function POST(
   }
 
   const pct = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0
+
+  // Send completion email to educator — fire-and-forget
+  const adminDb = createAdminClient()
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://gnosiscore.ai"
+  const timeTakenSecs = attempt.started_at
+    ? Math.round((Date.now() - new Date(attempt.started_at).getTime()) / 1000)
+    : 0
+
+  Promise.all([
+    adminDb.from("tests").select("creator_id").eq("id", testId).single(),
+    adminDb.from("users").select("full_name, email").eq("id", user.id).single(),
+  ]).then(async ([testRes, studentRes]) => {
+    if (testRes.error || !testRes.data) {
+      console.error("[submit] failed to fetch test creator:", testRes.error?.message)
+      return
+    }
+    if (studentRes.error || !studentRes.data) {
+      console.error("[submit] failed to fetch student:", studentRes.error?.message)
+      return
+    }
+    const { data: educatorRes, error: eduErr } = await adminDb
+      .from("users")
+      .select("email, full_name")
+      .eq("id", testRes.data.creator_id)
+      .single()
+    if (eduErr || !educatorRes) {
+      console.error("[submit] failed to fetch educator:", eduErr?.message)
+      return
+    }
+    console.log(`[submit] sending completion email to ${educatorRes.email}`)
+    return sendTestCompletedEmail({
+      educatorEmail: educatorRes.email,
+      educatorName: educatorRes.full_name ?? "Educator",
+      studentName: studentRes.data.full_name ?? studentRes.data.email ?? "A student",
+      testTitle: test.title,
+      scorePct: pct,
+      correctCount: score,
+      totalQuestions: maxScore,
+      timeTakenSecs,
+      resultsUrl: `${appUrl}/tests/${testId}/analytics`,
+    })
+  }).catch((err) => console.error("[submit] email failed:", err))
 
   return NextResponse.json({
     attempt_id: attempt.id,
