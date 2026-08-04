@@ -122,6 +122,7 @@ export async function POST(request: Request) {
 
   const threshold = await getEffectiveQuestionThreshold(user.id)
 
+  console.log(`[tests/generate] v2 — count=${count} prompt="${prompt.slice(0, 60)}"`)
   try {
     // ── Anti-hallucination: verify RAG chunks exist before queuing ─
     if (hasChapters && chapterDocIds.length > 0) {

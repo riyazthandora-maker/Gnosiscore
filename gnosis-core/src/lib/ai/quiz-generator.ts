@@ -123,7 +123,8 @@ Rules:
 - difficulty must be "easy", "medium", or "hard" matching the type assigned to this question
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested
-- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\\\int_0^1 f(x)\\\\,dx$$). IMPORTANT: because this is JSON, every LaTeX backslash must be doubled — write \\\\leq not \\leq, \\\\frac not \\frac, \\\\geq not \\geq`
+- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\\\int_0^1 f(x)\\\\,dx$$). IMPORTANT: because this is JSON, every LaTeX backslash must be doubled — write \\\\leq not \\leq, \\\\frac not \\frac, \\\\geq not \\geq
+- CRITICAL JSON RULE: Every string value must be on a single line. Do NOT embed literal newline, tab, carriage-return, or any other control character (ASCII 0-31) inside any JSON string. Use a space instead of a line break within string values.`
 }
 
 function fixLatexBackslashes(raw: string): string {
@@ -413,7 +414,8 @@ Rules:
 - difficulty must be "easy" or "hard" matching the difficulty level of this question
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested
-- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\\\int_0^1 f(x)\\\\,dx$$). IMPORTANT: because this is JSON, every LaTeX backslash must be doubled — write \\\\leq not \\leq, \\\\frac not \\frac, \\\\geq not \\geq`,
+- For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\\\int_0^1 f(x)\\\\,dx$$). IMPORTANT: because this is JSON, every LaTeX backslash must be doubled — write \\\\leq not \\leq, \\\\frac not \\frac, \\\\geq not \\geq
+- CRITICAL JSON RULE: Every string value must be on a single line. Do NOT embed literal newline, tab, carriage-return, or any other control character (ASCII 0-31) inside any JSON string. Use a space instead of a line break within string values.`,
         responseMimeType: "application/json",
         maxOutputTokens: Math.min(questionCount * 600, 8000),
         temperature: 0.7,
