@@ -309,7 +309,6 @@ async function generateFromBatches(
           contents: `<excerpts>\n${context}\n</excerpts>\n\nGenerate exactly ${q} multiple-choice questions from these excerpts.${focusLine}`,
           config: {
             systemInstruction: buildBlendedSystemPrompt(q, diffInstruction),
-            responseMimeType: "application/json",
             maxOutputTokens: Math.min(q * 600, 4000),
             temperature: 0.9,
             thinkingConfig: { thinkingBudget: 0 },
@@ -365,7 +364,6 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
         contents: `Generate exactly ${promptCount} multiple-choice questions about:\n\n${prompt}`,
         config: {
           systemInstruction: buildBlendedSystemPrompt(promptCount, diffInstruction),
-          responseMimeType: "application/json",
           maxOutputTokens: Math.min(promptCount * 600, 8000),
           temperature: 0.9,
           thinkingConfig: { thinkingBudget: 0 },
@@ -416,7 +414,6 @@ Rules:
 - topic: short noun phrase identifying the concept tested
 - For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\\\int_0^1 f(x)\\\\,dx$$). IMPORTANT: because this is JSON, every LaTeX backslash must be doubled — write \\\\leq not \\leq, \\\\frac not \\frac, \\\\geq not \\geq
 - CRITICAL JSON RULE: Every string value must be on a single line. Do NOT embed literal newline, tab, carriage-return, or any other control character (ASCII 0-31) inside any JSON string. Use a space instead of a line break within string values.`,
-        responseMimeType: "application/json",
         maxOutputTokens: Math.min(questionCount * 600, 8000),
         temperature: 0.7,
         thinkingConfig: { thinkingBudget: 0 },
