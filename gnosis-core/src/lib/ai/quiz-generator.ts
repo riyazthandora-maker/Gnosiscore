@@ -201,15 +201,33 @@ function fixLatexBackslashes(raw: string): string {
 
 function parseQuestions(text: string): GeneratedQuestion[] {
   const stripped = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim()
-  let parsed: { questions: GeneratedQuestion[] }
+
+  // Attempt 1: raw parse (works when Gemini returns clean JSON)
   try {
-    parsed = JSON.parse(stripped)
-  } catch {
-    // Retry after fixing unescaped LaTeX backslashes
-    parsed = JSON.parse(fixLatexBackslashes(stripped))
-  }
-  if (!Array.isArray(parsed.questions)) throw new Error("Unexpected response structure from AI.")
-  return parsed.questions
+    const r = JSON.parse(stripped) as { questions: GeneratedQuestion[] }
+    if (!Array.isArray(r?.questions)) throw new Error("bad structure")
+    return r.questions
+  } catch { /* fall through */ }
+
+  // Attempt 2: fix unescaped LaTeX backslashes + literal control chars via scanner
+  try {
+    const r = JSON.parse(fixLatexBackslashes(stripped)) as { questions: GeneratedQuestion[] }
+    if (!Array.isArray(r?.questions)) throw new Error("bad structure")
+    return r.questions
+  } catch { /* fall through */ }
+
+  // Attempt 3: global control-char strip (last resort — loses embedded newlines in
+  // string values but guarantees parseability for content like multi-line integrals)
+  console.error(
+    "[parseQuestions] both parse attempts failed — trying control-char strip.",
+    "Text around char 4300:", JSON.stringify(stripped.slice(4280, 4380))
+  )
+  const cleaned = stripped.replace(/[\x00-\x1F]/g, (c) =>
+    c === "\t" || c === "\n" || c === "\r" ? " " : ""
+  )
+  const r = JSON.parse(fixLatexBackslashes(cleaned)) as { questions: GeneratedQuestion[] }
+  if (!Array.isArray(r?.questions)) throw new Error("Unexpected response structure from AI.")
+  return r.questions
 }
 
 async function fetchAllChunksOrdered(
