@@ -8,6 +8,7 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { BookOpen, Clock, Users, Pencil, Trash2, Loader2, CheckCircle2, Globe } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { MathText } from "@/components/ui/math-text"
 import { cn } from "@/lib/utils"
 import type { Test, Question, QuestionOption } from "@/types"
 
@@ -208,7 +209,7 @@ export default function TestDetailPage({ params }: { params: Promise<{ id: strin
             <div className="flex items-start gap-3">
               <span className="shrink-0 text-sm font-bold text-muted-foreground tabular-nums w-6">{idx + 1}.</span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm">{q.question_text}</p>
+                <MathText className="text-sm">{q.question_text}</MathText>
                 <div className="mt-2 grid grid-cols-2 gap-1.5">
                   {(q.options as QuestionOption[]).map((opt) => (
                     <div
@@ -221,7 +222,7 @@ export default function TestDetailPage({ params }: { params: Promise<{ id: strin
                       )}
                     >
                       <span className="font-bold">{opt.label}.</span>
-                      <span className="truncate">{opt.text}</span>
+                      <MathText className="truncate">{opt.text}</MathText>
                     </div>
                   ))}
                 </div>
@@ -229,7 +230,10 @@ export default function TestDetailPage({ params }: { params: Promise<{ id: strin
                   <span className="capitalize">{q.difficulty}</span>
                   {q.topic_tags.length > 0 && <span>· {q.topic_tags[0]}</span>}
                   {q.explanation && (
-                    <span className="truncate max-w-xs">· {q.explanation}</span>
+                    <span className="flex items-center gap-1 min-w-0">
+                      <span>·</span>
+                      <MathText className="truncate max-w-xs">{q.explanation}</MathText>
+                    </span>
                   )}
                 </div>
               </div>
