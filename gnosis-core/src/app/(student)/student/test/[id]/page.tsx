@@ -6,7 +6,7 @@ import { useQuery, useMutation } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   ChevronLeft, ChevronRight, Clock, AlertCircle,
-  Loader2, CheckCircle2, Pause, Play,
+  Loader2, CheckCircle2, Pause, Play, BookOpen,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { MathText } from "@/components/ui/math-text"
@@ -32,7 +32,7 @@ interface TestData {
   questions: QuizQuestion[]
 }
 
-type Phase = "loading" | "playing" | "paused" | "confirming" | "submitting"
+type Phase = "loading" | "lobby" | "playing" | "paused" | "confirming" | "submitting"
 
 const INACTIVITY_SECONDS = 600 // 10 minutes
 
@@ -76,6 +76,7 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
   const router = useRouter()
 
   const [phase, setPhase] = useState<Phase>("loading")
+  const [starting, setStarting] = useState(false)
   const [currentIdx, setCurrentIdx] = useState(0)
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [direction, setDirection] = useState<1 | -1>(1)
@@ -106,24 +107,11 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
   const answeredCount = Object.keys(answers).length
   const allAnswered = answeredCount === questions.length
 
-  // Start/resume attempt on server once test data loads
+  // Show lobby once test data is ready
   useEffect(() => {
     if (!test) return
-    fetch("/api/tests/attempts/start", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ test_id: testId }),
-    })
-      .then((r) => r.json())
-      .then((d) => {
-        setAttemptId(d.attempt_id)
-        if (d.saved_answers && Object.keys(d.saved_answers).length > 0) {
-          setAnswers(d.saved_answers)
-        }
-        setPhase("playing")
-      })
-      .catch(() => setPhase("playing"))
-  }, [test, testId])
+    setPhase("lobby")
+  }, [test])
 
   // Heartbeat every 15s while playing
   useEffect(() => {
@@ -230,6 +218,27 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
     setCurrentIdx(idx)
   }
 
+  async function handleBeginTest() {
+    setStarting(true)
+    try {
+      const res = await fetch("/api/tests/attempts/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ test_id: testId }),
+      })
+      const d = await res.json()
+      setAttemptId(d.attempt_id)
+      if (d.saved_answers && Object.keys(d.saved_answers).length > 0) {
+        setAnswers(d.saved_answers)
+      }
+      setPhase("playing")
+    } catch {
+      setPhase("playing")
+    } finally {
+      setStarting(false)
+    }
+  }
+
   if (fetchError || (data && !data.test)) {
     return (
       <div className="flex flex-col items-center gap-4 py-20 text-center">
@@ -241,11 +250,106 @@ export default function QuizPlayerPage({ params }: { params: Promise<{ id: strin
     )
   }
 
-  if (phase === "loading" || !test || !currentQ) {
+  if (phase === "loading" || !test) {
     return (
       <div className="flex flex-col items-center gap-3 py-20">
         <Loader2 className="size-8 animate-spin text-muted-foreground" />
         <p className="text-sm text-muted-foreground">Loading test…</p>
+      </div>
+    )
+  }
+
+  if (phase === "lobby") {
+    const hasInProgress = (data?.attempt_count ?? 0) > 0
+    return (
+      <div className="mx-auto max-w-md py-10 space-y-6">
+        {/* Title */}
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 text-muted-foreground text-sm">
+            <BookOpen className="size-4" />
+            <span>Test</span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">{test.title}</h1>
+          {test.description && (
+            <p className="text-sm text-muted-foreground">{test.description}</p>
+          )}
+        </div>
+
+        {/* Test details */}
+        <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Test details</p>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Questions</p>
+              <p className="font-semibold">{questions.length}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Time limit</p>
+              <p className="font-semibold">
+                {test.time_limit_min ? `${test.time_limit_min} minutes` : "No limit"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground mb-0.5">Pausing</p>
+              <p className="font-semibold">{test.allow_pause ? "Allowed" : "Not allowed"}</p>
+            </div>
+            {test.due_at && (
+              <div>
+                <p className="text-xs text-muted-foreground mb-0.5">Due</p>
+                <p className="font-semibold">
+                  {new Intl.DateTimeFormat("en", { dateStyle: "medium" }).format(new Date(test.due_at))}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Rules */}
+        <div className="rounded-xl border border-border bg-muted/30 p-5 space-y-3">
+          <p className="text-sm font-semibold">Before you begin</p>
+          <ul className="space-y-2.5 text-sm text-muted-foreground">
+            <li className="flex items-start gap-2.5">
+              <span className="mt-2 shrink-0 size-1.5 rounded-full bg-muted-foreground/50" />
+              Select one answer per question. You can change your answer before submitting.
+            </li>
+            <li className="flex items-start gap-2.5">
+              <span className="mt-2 shrink-0 size-1.5 rounded-full bg-muted-foreground/50" />
+              Navigate freely between questions using the buttons or the number grid at the bottom.
+            </li>
+            {test.time_limit_min && (
+              <li className="flex items-start gap-2.5">
+                <span className="mt-2 shrink-0 size-1.5 rounded-full bg-muted-foreground/50" />
+                The timer starts the moment you click Begin. Submit before time runs out or it will auto-submit.
+              </li>
+            )}
+            {!test.allow_pause && (
+              <li className="flex items-start gap-2.5">
+                <span className="mt-2 shrink-0 size-1.5 rounded-full bg-muted-foreground/50" />
+                Pausing is not permitted for this test.
+              </li>
+            )}
+            <li className="flex items-start gap-2.5">
+              <span className="mt-2 shrink-0 size-1.5 rounded-full bg-muted-foreground/50" />
+              Closing or refreshing the tab will auto-submit your current answers.
+            </li>
+          </ul>
+        </div>
+
+        {hasInProgress && (
+          <p className="text-sm text-amber-600 dark:text-amber-400 text-center font-medium">
+            You have a previous attempt on record. This will count as a new attempt.
+          </p>
+        )}
+
+        <Button
+          className="w-full gap-2"
+          size="lg"
+          onClick={handleBeginTest}
+          disabled={starting}
+        >
+          {starting ? <Loader2 className="size-4 animate-spin" /> : null}
+          {starting ? "Starting…" : "Begin Test"}
+        </Button>
       </div>
     )
   }
