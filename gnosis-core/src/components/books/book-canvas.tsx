@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-  Check, ChevronLeft, GripVertical, Loader2, Paperclip, Plus, Share2, Sparkles, Trash2, UserPlus, X,
+  Check, ChevronLeft, ChevronDown, GripVertical, Loader2, Paperclip, Plus, Share2, Sparkles,
+  Trash2, UserPlus, Wand2, X,
 } from "lucide-react"
+import type { Difficulty } from "@/types"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -196,6 +198,218 @@ function ShareDialog({ bookId, onClose }: { bookId: string; onClose: () => void 
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── GenerateQuizPanel ─────────────────────────────────────────────────────────
+
+interface Chapter { index: number; title: string }
+
+interface GenerateQuizPanelProps {
+  book: Book
+  onClose: () => void
+}
+
+function GenerateQuizPanel({ book, onClose }: GenerateQuizPanelProps) {
+  const chapters: Chapter[] = book.blocks
+    .map((b, i) => (b.level === "chapter" ? { index: i, title: b.text || `Chapter ${i + 1}` } : null))
+    .filter((x): x is Chapter => x !== null)
+
+  const chapterNumbers = chapters.map((_, i) => i)
+
+  const [scope, setScope] = useState<"full" | "chapter">("full")
+  const [chapterIdx, setChapterIdx] = useState(0)
+  const [name, setName] = useState(`${book.title || "Untitled Book"} Quiz`)
+  const [difficulty, setDifficulty] = useState<Difficulty>("medium")
+  const [count, setCount] = useState(10)
+  const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<{ questionCount: number; requestId: string } | null>(null)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState("")
+
+  async function generate() {
+    if (loading) return
+    setLoading(true)
+    setError("")
+    setResult(null)
+    setPending(false)
+
+    try {
+      const res = await fetch(`/api/books/${book.id}/generate-quiz`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: name.trim(),
+          scope,
+          chapterIndex: chapterIdx,
+          difficulty,
+          questionCount: count,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setError(data.error ?? "Generation failed."); return }
+      if (data.status === "pending_admin") {
+        setPending(true)
+      } else {
+        setResult({ questionCount: data.question_count, requestId: data.request_id })
+      }
+    } catch {
+      setError("Generation failed.")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const DIFF: { value: Difficulty; label: string; color: string }[] = [
+    { value: "easy",   label: "Easy",   color: "border-green-500 text-green-600 dark:text-green-400" },
+    { value: "medium", label: "Medium", color: "border-amber-400 text-amber-600 dark:text-amber-400" },
+    { value: "hard",   label: "Hard",   color: "border-destructive text-destructive" },
+  ]
+
+  return (
+    <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Wand2 className="size-4 text-primary" />
+          <span className="text-sm font-semibold">Generate Quiz from Book</span>
+        </div>
+        <Button variant="ghost" size="icon-xs" onClick={onClose}>
+          <X className="size-4" />
+        </Button>
+      </div>
+
+      {/* Success state */}
+      {result ? (
+        <div className="space-y-3">
+          <div className="flex items-start gap-2 rounded-lg bg-green-500/10 px-3 py-2.5 text-sm text-green-700 dark:text-green-400">
+            <Check className="mt-0.5 size-4 shrink-0" />
+            <span>
+              <strong>{result.questionCount} questions</strong> added to your question bank
+              with status <em>pending review</em>.
+            </span>
+          </div>
+          <div className="flex gap-2">
+            <a
+              href="/tests/generate"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted/50 transition-colors"
+            >
+              Build a Test <ChevronDown className="size-3 -rotate-90" />
+            </a>
+            <button
+              onClick={() => { setResult(null); setPending(false) }}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Generate more
+            </button>
+          </div>
+        </div>
+      ) : pending ? (
+        <div className="rounded-lg bg-amber-500/10 px-3 py-2.5 text-sm text-amber-700 dark:text-amber-400">
+          Request queued for admin approval — you'll be notified when questions are ready.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Name */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary/60"
+            />
+          </div>
+
+          {/* Scope */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Scope</label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setScope("full")}
+                className={cn(
+                  "flex-1 rounded-lg border px-3 py-2 text-sm transition-colors",
+                  scope === "full"
+                    ? "border-primary bg-primary/5 text-primary font-medium"
+                    : "border-border text-muted-foreground hover:bg-muted/40",
+                )}
+              >
+                Full Book
+              </button>
+              <button
+                onClick={() => setScope("chapter")}
+                disabled={chapters.length === 0}
+                className={cn(
+                  "flex-1 rounded-lg border px-3 py-2 text-sm transition-colors disabled:opacity-40",
+                  scope === "chapter"
+                    ? "border-primary bg-primary/5 text-primary font-medium"
+                    : "border-border text-muted-foreground hover:bg-muted/40",
+                )}
+              >
+                Chapter
+              </button>
+            </div>
+            {scope === "chapter" && chapters.length > 0 && (
+              <select
+                value={chapterIdx}
+                onChange={(e) => setChapterIdx(Number(e.target.value))}
+                className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none"
+              >
+                {chapters.map((ch, i) => (
+                  <option key={ch.index} value={i}>
+                    {ch.title}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Difficulty */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Difficulty</label>
+            <div className="flex gap-2">
+              {DIFF.map((d) => (
+                <button
+                  key={d.value}
+                  onClick={() => setDifficulty(d.value)}
+                  className={cn(
+                    "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                    difficulty === d.value
+                      ? cn("bg-muted/60", d.color)
+                      : "border-border text-muted-foreground hover:bg-muted/40",
+                  )}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Count */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Questions <span className="text-muted-foreground/60">(1–30)</span>
+            </label>
+            <input
+              type="number"
+              min={1}
+              max={30}
+              value={count}
+              onChange={(e) => setCount(Math.min(30, Math.max(1, parseInt(e.target.value, 10) || 1)))}
+              className="w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary/60 tabular-nums"
+            />
+          </div>
+
+          {error && <p className="text-xs text-destructive">{error}</p>}
+
+          <Button onClick={generate} disabled={loading || !name.trim()} size="sm">
+            {loading
+              ? <><Loader2 className="size-3.5 animate-spin" /> Generating…</>
+              : <><Wand2 className="size-3.5" /> Generate {count} Questions</>
+            }
+          </Button>
+        </div>
+      )}
     </div>
   )
 }
@@ -398,6 +612,7 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
+  const [quizOpen, setQuizOpen] = useState(false)
   const [presence, setPresence] = useState<PresenceEntry[]>([])
 
   const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
@@ -795,6 +1010,19 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
             {saveStatus === "saving" ? "Saving…" : saveStatus === "error" ? "Save failed" : "Saved"}
           </span>
 
+          {/* Generate Quiz (non-viewers) */}
+          {!isReadOnly && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setQuizOpen((v) => !v)}
+              className={quizOpen ? "border-primary text-primary" : ""}
+            >
+              <Wand2 className="size-3.5" />
+              Quiz
+            </Button>
+          )}
+
           {/* Share (owner only) */}
           {isOwner && (
             <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
@@ -803,6 +1031,11 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
             </Button>
           )}
         </div>
+
+        {/* Generate Quiz panel */}
+        {quizOpen && !isReadOnly && (
+          <GenerateQuizPanel book={book} onClose={() => setQuizOpen(false)} />
+        )}
 
         {/* Read-only banner */}
         {isReadOnly && (
