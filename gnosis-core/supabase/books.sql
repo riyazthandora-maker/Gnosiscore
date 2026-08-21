@@ -62,16 +62,22 @@ CREATE POLICY "books_editor_update" ON public.books
     )
   );
 
+-- Circular-reference guard: book_collaborators policies used to query books,
+-- while books SELECT policies query book_collaborators — infinite recursion
+-- (42P17). The ownership check now lives in a SECURITY DEFINER function that
+-- bypasses RLS, breaking the cycle.
+CREATE OR REPLACE FUNCTION public.is_book_owner(p_book_id UUID)
+RETURNS BOOLEAN LANGUAGE sql SECURITY DEFINER STABLE SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.books b WHERE b.id = p_book_id AND b.owner_id = auth.uid()
+  );
+$$;
+
 DROP POLICY IF EXISTS "book_collabs_owner_all" ON public.book_collaborators;
 DROP POLICY IF EXISTS "book_collabs_self_read" ON public.book_collaborators;
 
 CREATE POLICY "book_collabs_owner_all" ON public.book_collaborators
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.books b
-      WHERE b.id = book_id AND b.owner_id = auth.uid()
-    )
-  );
+  FOR ALL USING (public.is_book_owner(book_id));
 
 CREATE POLICY "book_collabs_self_read" ON public.book_collaborators
   FOR SELECT USING (user_id = auth.uid());
