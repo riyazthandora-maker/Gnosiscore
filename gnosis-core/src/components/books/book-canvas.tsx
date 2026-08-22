@@ -38,10 +38,18 @@ function uid() {
   return Math.random().toString(36).slice(2, 10)
 }
 
-const LEVELS: BlockLevel[] = ["chapter", "section", "concept"]
+const LEVELS: BlockLevel[] = ["chapter", "section", "details"]
 
-function indentOf(level: BlockLevel) {
-  return LEVELS.indexOf(level)
+function computeIndent(blocks: FlatBlock[], index: number): number {
+  const level = blocks[index].level
+  if (level === "chapter") return 0
+  if (level === "section") return 20
+  // details: look backwards for nearest chapter (→ 20px) or section (→ 40px)
+  for (let i = index - 1; i >= 0; i--) {
+    if (blocks[i].level === "chapter") return 20
+    if (blocks[i].level === "section") return 40
+  }
+  return 20
 }
 
 function deeperLevel(level: BlockLevel): BlockLevel {
@@ -55,13 +63,13 @@ function shallowerLevel(level: BlockLevel): BlockLevel {
 const LEVEL_TEXT: Record<BlockLevel, string> = {
   chapter: "text-xl font-bold",
   section: "text-base font-semibold",
-  concept: "text-sm font-normal",
+  details: "text-sm font-normal leading-relaxed",
 }
 
 const LEVEL_PLACEHOLDER: Record<BlockLevel, string> = {
   chapter: "Chapter title…",
-  section: "Section title…",
-  concept: "Key concept or notes…",
+  section: "Section heading…",
+  details: "Write details here…",
 }
 
 // ── ShareDialog ───────────────────────────────────────────────────────────────
@@ -205,6 +213,7 @@ function ShareDialog({ bookId, onClose }: { bookId: string; onClose: () => void 
 
 interface BlockRowProps {
   block: FlatBlock
+  textIndent: number
   isDragOver: boolean
   isDragging: boolean
   isGenerating: boolean
@@ -216,7 +225,7 @@ interface BlockRowProps {
   onAiSubmit: () => void
   onAiClose: () => void
   onTextChange: (id: string, text: string) => void
-  onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>, id: string) => void
+  onKeyDown: (e: React.KeyboardEvent<HTMLElement>, id: string) => void
   onDragStart: (id: string) => void
   onDragOver: (id: string) => void
   onDrop: (id: string) => void
@@ -226,11 +235,12 @@ interface BlockRowProps {
   onDelete: (id: string) => void
   onFocus: (id: string) => void
   onBlur: () => void
-  inputRef: (el: HTMLInputElement | null) => void
+  inputRef: (el: HTMLInputElement | HTMLTextAreaElement | null) => void
 }
 
 function BlockRow({
   block,
+  textIndent,
   isDragOver,
   isDragging,
   isGenerating,
@@ -255,7 +265,7 @@ function BlockRow({
   inputRef,
 }: BlockRowProps) {
   const [hovered, setHovered] = useState(false)
-  const textIndent = indentOf(block.level) * 24
+  const isDetails = block.level === "details"
 
   return (
     <div
@@ -274,7 +284,8 @@ function BlockRow({
     >
       <div
         className={cn(
-          "flex items-center gap-1 rounded-lg px-1 py-1 transition-colors",
+          "flex gap-1 rounded-lg px-1 transition-colors",
+          isDetails ? "items-start py-1.5" : "items-center py-1",
           hovered && "bg-muted/40",
           isGenerating && "opacity-60",
         )}
@@ -285,27 +296,55 @@ function BlockRow({
       >
         <span className={cn(
           "shrink-0 cursor-grab p-0.5 text-muted-foreground/40 hover:text-muted-foreground transition-opacity",
+          isDetails && "mt-0.5",
           hovered && !isGenerating && !isReadOnly ? "opacity-100" : "opacity-0",
         )}>
           <GripVertical className="size-4" />
         </span>
 
-        <input
-          ref={inputRef}
-          type="text"
-          value={block.text}
-          placeholder={LEVEL_PLACEHOLDER[block.level]}
-          style={{ marginLeft: textIndent }}
-          onChange={(e) => onTextChange(block.id, e.target.value)}
-          onKeyDown={(e) => onKeyDown(e, block.id)}
-          onFocus={() => onFocus(block.id)}
-          onBlur={onBlur}
-          disabled={isGenerating || isReadOnly}
-          className={cn(
-            "flex-1 bg-transparent outline-none placeholder:text-muted-foreground/35 disabled:cursor-default",
-            LEVEL_TEXT[block.level],
-          )}
-        />
+        {isDetails ? (
+          <textarea
+            ref={(el) => (inputRef as (el: HTMLTextAreaElement | null) => void)(el)}
+            value={block.text}
+            placeholder={LEVEL_PLACEHOLDER[block.level]}
+            rows={1}
+            style={{ marginLeft: textIndent }}
+            onChange={(e) => {
+              onTextChange(block.id, e.target.value)
+              e.currentTarget.style.height = "auto"
+              e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
+            }}
+            onKeyDown={(e) => onKeyDown(e as React.KeyboardEvent<HTMLElement>, block.id)}
+            onFocus={(e) => {
+              onFocus(block.id)
+              e.currentTarget.style.height = "auto"
+              e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
+            }}
+            onBlur={onBlur}
+            disabled={isGenerating || isReadOnly}
+            className={cn(
+              "flex-1 bg-transparent outline-none placeholder:text-muted-foreground/35 disabled:cursor-default resize-none overflow-hidden",
+              LEVEL_TEXT[block.level],
+            )}
+          />
+        ) : (
+          <input
+            ref={inputRef as (el: HTMLInputElement | null) => void}
+            type="text"
+            value={block.text}
+            placeholder={LEVEL_PLACEHOLDER[block.level]}
+            style={{ marginLeft: textIndent }}
+            onChange={(e) => onTextChange(block.id, e.target.value)}
+            onKeyDown={(e) => onKeyDown(e as React.KeyboardEvent<HTMLElement>, block.id)}
+            onFocus={() => onFocus(block.id)}
+            onBlur={onBlur}
+            disabled={isGenerating || isReadOnly}
+            className={cn(
+              "flex-1 bg-transparent outline-none placeholder:text-muted-foreground/35 disabled:cursor-default",
+              LEVEL_TEXT[block.level],
+            )}
+          />
+        )}
 
         {!isReadOnly && (
           <div className={cn(
@@ -400,8 +439,9 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [presence, setPresence] = useState<PresenceEntry[]>([])
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
 
-  const inputRefs = useRef<Map<string, HTMLInputElement>>(new Map())
+  const inputRefs = useRef<Map<string, HTMLInputElement | HTMLTextAreaElement>>(new Map())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
@@ -438,6 +478,9 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
         return
       }
       const { book: data } = await res.json() as { book: Book }
+      data.blocks = data.blocks.map((b) =>
+        (b.level as string) === "concept" ? { ...b, level: "details" as BlockLevel } : b
+      )
       setBook(data)
       setLoaded(true)
 
@@ -565,6 +608,7 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
 
   function handleBlockFocus(blockId: string) {
     focusedBlockIdRef.current = blockId
+    setSelectedBlockId(blockId)
     trackPresence(blockId)
   }
 
@@ -659,6 +703,20 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
     focusBlock(nb.id)
   }
 
+  function addSection() {
+    if (!selectedBlockId) return
+    const block = book?.blocks.find((b) => b.id === selectedBlockId)
+    if (block?.level !== "chapter") return
+    addBlock(selectedBlockId, "section")
+  }
+
+  function addDetails() {
+    if (!selectedBlockId) return
+    const block = book?.blocks.find((b) => b.id === selectedBlockId)
+    if (block?.level !== "chapter" && block?.level !== "section") return
+    addBlock(selectedBlockId, "details")
+  }
+
   function deleteBlock(id: string) {
     mutate((prev) => {
       if (prev.blocks.length <= 1) return prev
@@ -686,9 +744,13 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
     }))
   }
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>, id: string) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLElement>, id: string) {
     const block = book?.blocks.find((b) => b.id === id)
     if (!block) return
+    if (block.level === "details") {
+      if (e.key === "Backspace" && block.text === "") { e.preventDefault(); deleteBlock(id) }
+      return
+    }
     if (e.key === "Enter") { e.preventDefault(); addBlock(id, block.level) }
     else if (e.key === "Tab") { e.preventDefault(); changeLevel(id, e.shiftKey ? -1 : 1) }
     else if (e.key === "Backspace" && block.text === "") { e.preventDefault(); deleteBlock(id) }
@@ -814,10 +876,11 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
 
         {/* Canvas */}
         <div className="rounded-xl border border-border bg-card p-4 space-y-0.5">
-          {book.blocks.map((block) => (
+          {book.blocks.map((block, index) => (
             <BlockRow
               key={block.id}
               block={block}
+              textIndent={computeIndent(book.blocks, index)}
               isDragOver={dragOverId === block.id}
               isDragging={draggingId === block.id}
               isGenerating={generatingId === block.id}
@@ -852,15 +915,50 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
             />
           ))}
 
-          {!isReadOnly && (
-            <button
-              onClick={addChapter}
-              className="mt-3 flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground/50 hover:bg-muted/40 hover:text-muted-foreground transition-colors"
-            >
-              <Plus className="size-4" />
-              Add Chapter
-            </button>
-          )}
+          {!isReadOnly && (() => {
+            const sel = selectedBlockId ? book.blocks.find((b) => b.id === selectedBlockId) : null
+            const canAddSection = sel?.level === "chapter"
+            const canAddDetails = sel?.level === "chapter" || sel?.level === "section"
+            return (
+              <div className="mt-3 flex items-center gap-1 flex-wrap">
+                <button
+                  onClick={addChapter}
+                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground/50 hover:bg-muted/40 hover:text-muted-foreground transition-colors"
+                >
+                  <Plus className="size-4" />
+                  Add Chapter
+                </button>
+                <button
+                  onClick={addSection}
+                  disabled={!canAddSection}
+                  title={canAddSection ? undefined : "Select a chapter first"}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors",
+                    canAddSection
+                      ? "text-muted-foreground/50 hover:bg-muted/40 hover:text-muted-foreground"
+                      : "text-muted-foreground/25 cursor-not-allowed",
+                  )}
+                >
+                  <Plus className="size-4" />
+                  Add Section
+                </button>
+                <button
+                  onClick={addDetails}
+                  disabled={!canAddDetails}
+                  title={canAddDetails ? undefined : "Select a chapter or section first"}
+                  className={cn(
+                    "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors",
+                    canAddDetails
+                      ? "text-muted-foreground/50 hover:bg-muted/40 hover:text-muted-foreground"
+                      : "text-muted-foreground/25 cursor-not-allowed",
+                  )}
+                >
+                  <Plus className="size-4" />
+                  Add Details
+                </button>
+              </div>
+            )
+          })()}
         </div>
       </div>
 

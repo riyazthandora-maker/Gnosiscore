@@ -6,51 +6,51 @@ import type { BlockLevel } from "@/types/book"
 // ── System prompts per level ──────────────────────────────────────────────────
 
 const SYSTEM_PROMPTS: Record<BlockLevel, string> = {
-  chapter: `You are an expert educational content author. Given a chapter title and optional instructions, generate a structured chapter outline as an ordered flat list of sections and key concept notes.
+  chapter: `You are an expert educational content author. Given a chapter title and optional instructions, generate a structured chapter outline as an ordered flat list of sections and detail notes.
 
 Output ONLY valid JSON with this exact schema — no markdown fences, no extra text:
 {
   "blocks": [
-    { "level": "section" | "concept", "text": "..." }
+    { "level": "section" | "details", "text": "..." }
   ]
 }
 
 Rules:
 - Generate 3–5 sections (level: "section") with clear, descriptive titles
-- Under each section add 2–4 key concept blocks (level: "concept")
-- Maintain strict reading order: [section → its concepts → next section → its concepts → ...]
-- For STEM subjects: include definitions, formulas (plain text), and worked-example hints as concept notes
+- Under each section add 2–4 detail blocks (level: "details")
+- Maintain strict reading order: [section → its details → next section → its details → ...]
+- For STEM subjects: include definitions, formulas (plain text), and worked-example hints as detail notes
 - For humanities and social sciences: include rich narrative detail — key dates, historical figures, causes and effects, definitions — not just bare titles
-- Concept text must be 1–3 substantive educational sentences, never a one-word heading
+- Detail text must be 1–3 substantive educational sentences, never a one-word heading
 - CRITICAL JSON RULE: Every string value must be on a single line with no literal newlines or control characters inside it`,
 
-  section: `You are an expert educational content author. Expand a textbook section with detailed key concept notes.
+  section: `You are an expert educational content author. Expand a textbook section with detailed notes.
 
 Output ONLY valid JSON — no markdown fences, no extra text:
 {
   "blocks": [
-    { "level": "concept", "text": "..." }
+    { "level": "details", "text": "..." }
   ]
 }
 
 Rules:
-- Generate 4–6 concept blocks (all level: "concept")
+- Generate 4–6 detail blocks (all level: "details")
 - For STEM: include definitions, formulas, derivation hints, and worked examples
 - For humanities and social sciences: write narrative paragraphs that include specific names, dates, causes, effects, and historical significance
-- Each concept block must be 2–4 informative sentences — never a bare heading
+- Each detail block must be 2–4 informative sentences — never a bare heading
 - CRITICAL JSON RULE: Every string value must be on a single line with no literal newlines or control characters inside it`,
 
-  concept: `You are an expert educational content author. Expand a single key concept into a rich set of educational detail notes.
+  details: `You are an expert educational content author. Expand a detail note into a rich set of educational paragraphs.
 
 Output ONLY valid JSON — no markdown fences, no extra text:
 {
   "blocks": [
-    { "level": "concept", "text": "..." }
+    { "level": "details", "text": "..." }
   ]
 }
 
 Rules:
-- Generate 2–4 concept blocks (all level: "concept")
+- Generate 2–4 detail blocks (all level: "details")
 - First block: extended definition or main explanation (3–5 sentences)
 - Subsequent blocks: worked examples, historical context, real-world applications, analogies, or common misconceptions
 - For social science topics: include specific dates, people, places, and consequences
@@ -61,7 +61,7 @@ Rules:
 const MAX_TOKENS: Record<BlockLevel, number> = {
   chapter: 3000,
   section: 2000,
-  concept: 1500,
+  details: 1500,
 }
 
 // ── Gemini call with optional image parts ─────────────────────────────────────
@@ -86,7 +86,7 @@ async function callGeminiWithContext(
   if (!Array.isArray(parsed?.blocks)) throw new Error("Unexpected AI response structure.")
 
   return parsed.blocks.filter(
-    (b) => (b.level === "section" || b.level === "concept") && typeof b.text === "string" && b.text.trim()
+    (b) => (b.level === "section" || b.level === "details") && typeof b.text === "string" && b.text.trim()
   )
 }
 
@@ -146,7 +146,7 @@ async function callGeminiWithImage(
   if (!Array.isArray(parsed?.blocks)) throw new Error("Unexpected AI response structure.")
 
   return parsed.blocks.filter(
-    (b) => (b.level === "section" || b.level === "concept") && typeof b.text === "string" && b.text.trim()
+    (b) => (b.level === "section" || b.level === "details") && typeof b.text === "string" && b.text.trim()
   )
 }
 
@@ -198,7 +198,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate level
-    if (!["chapter", "section", "concept"].includes(blockLevel)) {
+    if (!["chapter", "section", "details"].includes(blockLevel)) {
       return NextResponse.json({ error: "Invalid blockLevel" }, { status: 400 })
     }
 
@@ -247,7 +247,7 @@ function buildUserMessage(
   const parts: string[] = []
 
   if (blockText.trim()) {
-    const label = level === "chapter" ? "Chapter" : level === "section" ? "Section" : "Concept"
+    const label = level === "chapter" ? "Chapter" : level === "section" ? "Section" : "Details"
     parts.push(`${label}: "${blockText.trim()}"`)
   }
 

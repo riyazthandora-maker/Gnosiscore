@@ -1,4 +1,4 @@
-export type BlockLevel = "chapter" | "section" | "concept"
+export type BlockLevel = "chapter" | "section" | "details"
 
 export interface FlatBlock {
   id: string
