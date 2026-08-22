@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-  ChevronLeft, GripVertical, Loader2, Plus, Share2,
+  ChevronLeft, GripVertical, Loader2, Paperclip, Plus, Share2,
   Sparkles, Trash2, UserPlus, X,
 } from "lucide-react"
 import type { RealtimeChannel } from "@supabase/supabase-js"
@@ -58,6 +58,14 @@ function deeperLevel(level: BlockLevel): BlockLevel {
 
 function shallowerLevel(level: BlockLevel): BlockLevel {
   return LEVELS[Math.max(LEVELS.indexOf(level) - 1, 0)]
+}
+
+const PER_FILE_MAX = 4 * 1024 * 1024
+const BATCH_MAX = 7 * 1024 * 1024
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
 const LEVEL_TEXT: Record<BlockLevel, string> = {
@@ -388,6 +396,225 @@ function AiOutlineDialog({
   )
 }
 
+// ── ImportDialog ─────────────────────────────────────────────────────────────
+
+function ImportDialog({
+  onClose,
+  onMerge,
+}: {
+  onClose: () => void
+  onMerge: (blocks: FlatBlock[]) => void
+}) {
+  const [files, setFiles] = useState<File[]>([])
+  const [validationError, setValidationError] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [draftBlocks, setDraftBlocks] = useState<FlatBlock[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  function handleFiles(selected: FileList | null) {
+    if (!selected) return
+    const arr = Array.from(selected)
+    const oversized = arr.find((f) => f.size > PER_FILE_MAX)
+    if (oversized) {
+      setValidationError(`"${oversized.name}" exceeds the 4 MB per-file limit`)
+      setFiles([])
+      return
+    }
+    const totalSize = arr.reduce((sum, f) => sum + f.size, 0)
+    if (totalSize > BATCH_MAX) {
+      setValidationError(`Total size (${formatBytes(totalSize)}) exceeds the 7 MB batch limit`)
+      setFiles([])
+      return
+    }
+    setValidationError("")
+    setFiles(arr)
+  }
+
+  async function processFiles() {
+    if (files.length === 0 || loading) return
+    setLoading(true)
+    setError("")
+    try {
+      const formData = new FormData()
+      for (const f of files) formData.append("file", f)
+      const res = await fetch("/api/books/ai-import", { method: "POST", body: formData })
+      const data = await res.json() as { blocks?: FlatBlock[]; error?: string }
+      if (!res.ok) { setError(data.error ?? "Processing failed"); return }
+      setDraftBlocks(data.blocks ?? [])
+    } catch {
+      setError("Processing failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function updateDraftText(id: string, text: string) {
+    setDraftBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, text } : b)))
+  }
+
+  function deleteDraftBlock(id: string) {
+    setDraftBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.id === id)
+      if (idx === -1) return prev
+      if (prev[idx].level === "section") {
+        let end = idx + 1
+        while (end < prev.length && prev[end].level === "details") end++
+        return [...prev.slice(0, idx), ...prev.slice(end)]
+      }
+      return prev.filter((b) => b.id !== id)
+    })
+  }
+
+  const hasDraft = draftBlocks.length > 0
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0)
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-xl flex flex-col max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4 shrink-0">
+          <div className="flex items-center gap-2">
+            <Paperclip className="size-4 text-primary" />
+            <h2 className="text-base font-semibold">Import & Structure with AI</h2>
+          </div>
+          <Button variant="ghost" size="icon-xs" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        {!hasDraft ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground">
+              Upload PDFs or images — AI will extract and structure the content into your book hierarchy.
+            </p>
+
+            <div
+              className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-background/50 px-4 py-6 cursor-pointer hover:border-primary/40 hover:bg-muted/20 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              <Paperclip className="size-5 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">Click to select files</p>
+              <p className="text-xs text-muted-foreground/50">PDF, PNG, JPG · Max 4 MB per file · 7 MB total</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept=".pdf,.png,.jpg,.jpeg"
+                className="hidden"
+                onChange={(e) => handleFiles(e.target.files)}
+              />
+            </div>
+
+            {validationError && (
+              <p className="text-xs text-destructive">{validationError}</p>
+            )}
+
+            {files.length > 0 && (
+              <div className="space-y-1.5">
+                {files.map((f, i) => (
+                  <div key={i} className="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2">
+                    <span className="text-sm truncate flex-1 mr-2">{f.name}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{formatBytes(f.size)}</span>
+                  </div>
+                ))}
+                <p className="text-xs text-muted-foreground text-right">Total: {formatBytes(totalSize)}</p>
+              </div>
+            )}
+
+            {error && <p className="text-xs text-destructive">{error}</p>}
+
+            <Button
+              onClick={processFiles}
+              disabled={files.length === 0 || loading || !!validationError}
+            >
+              {loading ? (
+                <><Loader2 className="size-3.5 animate-spin mr-1.5" />Processing…</>
+              ) : (
+                <><Sparkles className="size-3.5 mr-1.5" />Process & Structure</>
+              )}
+            </Button>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground mb-3 shrink-0">
+              {draftBlocks.length} blocks extracted. Edit below, then merge into your book.
+            </p>
+            <div className="flex-1 overflow-y-auto rounded-xl border border-border bg-background/50 p-3 space-y-0.5 min-h-0 mb-4">
+              {draftBlocks.map((block, index) => {
+                const indent = computeIndent(draftBlocks, index)
+                const isDetails = block.level === "details"
+                return (
+                  <div
+                    key={block.id}
+                    className={cn(
+                      "group flex items-start gap-1 rounded-lg px-2 py-1.5",
+                      block.level === "section" && "mt-2 border-l-2 border-primary/40",
+                    )}
+                  >
+                    {isDetails ? (
+                      <textarea
+                        value={block.text}
+                        rows={1}
+                        style={{ marginLeft: indent }}
+                        onChange={(e) => {
+                          updateDraftText(block.id, e.target.value)
+                          e.currentTarget.style.height = "auto"
+                          e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.height = "auto"
+                          e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
+                        }}
+                        className={cn(
+                          "flex-1 bg-transparent outline-none resize-none overflow-hidden",
+                          LEVEL_TEXT[block.level],
+                        )}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={block.text}
+                        style={{ marginLeft: indent }}
+                        onChange={(e) => updateDraftText(block.id, e.target.value)}
+                        className={cn("flex-1 bg-transparent outline-none", LEVEL_TEXT[block.level])}
+                      />
+                    )}
+                    <button
+                      onClick={() => deleteDraftBlock(block.id)}
+                      className="shrink-0 mt-0.5 text-muted-foreground/20 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setDraftBlocks([])}>
+                ← Back
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={() => { onMerge(draftBlocks); onClose() }}
+                disabled={draftBlocks.length === 0}
+              >
+                Merge into Book ({draftBlocks.length})
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── BlockRow ──────────────────────────────────────────────────────────────────
 
 interface BlockRowProps {
@@ -546,6 +773,7 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
   const [aiOpen, setAiOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [presence, setPresence] = useState<PresenceEntry[]>([])
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
 
@@ -903,6 +1131,20 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
             </div>
           )}
 
+          {/* Import button */}
+          {!isReadOnly && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setImportOpen(true)}
+              title="Import & Structure with AI"
+              className="shrink-0 gap-1.5 text-muted-foreground"
+            >
+              <Paperclip className="size-3.5" />
+              <span className="hidden sm:inline">Import</span>
+            </Button>
+          )}
+
           {/* AI Outline Generator */}
           {!isReadOnly && (
             <Button
@@ -1026,6 +1268,14 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
       {aiOpen && (
         <AiOutlineDialog
           onClose={() => setAiOpen(false)}
+          onMerge={mergeAiBlocks}
+        />
+      )}
+
+      {/* Import dialog */}
+      {importOpen && (
+        <ImportDialog
+          onClose={() => setImportOpen(false)}
           onMerge={mergeAiBlocks}
         />
       )}
