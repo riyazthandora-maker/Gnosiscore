@@ -270,7 +270,7 @@ function BlockRow({
       <div
         className={cn(
           "flex gap-1 rounded-lg px-1 transition-colors",
-          isDetails ? "items-start py-1.5" : "items-center py-1",
+          isDetails ? "items-start py-2 sm:py-1.5" : "items-center py-2 sm:py-1",
           block.level === "section" && !presenceColor && "border-l-2 border-primary/40",
           hovered && (block.level === "section" ? "bg-primary/5" : "bg-muted/40"),
         )}
@@ -333,8 +333,9 @@ function BlockRow({
 
         {!isReadOnly && (
           <div className={cn(
-            "flex shrink-0 items-center gap-0.5 transition-opacity",
-            hovered ? "opacity-100" : "opacity-0 pointer-events-none",
+            "flex shrink-0 items-center gap-0.5",
+            "sm:transition-opacity",
+            hovered ? "sm:opacity-100" : "sm:opacity-0 sm:pointer-events-none",
           )}>
             <Button
               variant="ghost"
@@ -674,9 +675,9 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
 
   return (
     <>
-      <div className="space-y-6">
+      <div className={cn("space-y-6", !isReadOnly && "pb-16")}>
         {/* Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Button variant="ghost" size="icon-sm" onClick={() => router.push("/books")}>
             <ChevronLeft className="size-4" />
           </Button>
@@ -691,7 +692,7 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
             onBlur={() => { isTitleFocusedRef.current = false }}
             placeholder="Untitled Book"
             disabled={isReadOnly}
-            className="flex-1 bg-transparent text-2xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/35 disabled:cursor-default"
+            className="flex-1 min-w-0 bg-transparent text-xl sm:text-2xl font-bold tracking-tight outline-none placeholder:text-muted-foreground/35 disabled:cursor-default"
           />
 
           {/* Presence avatars */}
@@ -727,7 +728,7 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
           {isOwner && (
             <Button variant="outline" size="sm" onClick={() => setShareOpen(true)}>
               <Share2 className="size-3.5" />
-              Share
+              <span className="hidden sm:inline">Share</span>
             </Button>
           )}
         </div>
@@ -740,7 +741,7 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
         )}
 
         {/* Canvas */}
-        <div className="rounded-xl border border-border bg-card p-4 space-y-0.5">
+        <div className="rounded-xl border border-border bg-card p-3 sm:p-4 space-y-0.5">
           {book.blocks.map((block, index) => (
             <BlockRow
               key={block.id}
@@ -766,52 +767,54 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
             />
           ))}
 
-          {!isReadOnly && (() => {
-            const sel = selectedBlockId ? book.blocks.find((b) => b.id === selectedBlockId) : null
-            const canAddSection = sel?.level === "chapter"
-            const canAddDetails = sel?.level === "chapter" || sel?.level === "section"
-            return (
-              <div className="mt-3 flex items-center gap-1 flex-wrap">
-                <button
-                  onClick={addChapter}
-                  className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground/50 hover:bg-muted/40 hover:text-muted-foreground transition-colors"
-                >
-                  <Plus className="size-4" />
-                  Add Chapter
-                </button>
-                <button
-                  onClick={addSection}
-                  disabled={!canAddSection}
-                  title={canAddSection ? undefined : "Select a chapter first"}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors",
-                    canAddSection
-                      ? "text-muted-foreground/50 hover:bg-muted/40 hover:text-muted-foreground"
-                      : "text-muted-foreground/25 cursor-not-allowed",
-                  )}
-                >
-                  <Plus className="size-4" />
-                  Add Section
-                </button>
-                <button
-                  onClick={addDetails}
-                  disabled={!canAddDetails}
-                  title={canAddDetails ? undefined : "Select a chapter or section first"}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors",
-                    canAddDetails
-                      ? "text-muted-foreground/50 hover:bg-muted/40 hover:text-muted-foreground"
-                      : "text-muted-foreground/25 cursor-not-allowed",
-                  )}
-                >
-                  <Plus className="size-4" />
-                  Add Details
-                </button>
-              </div>
-            )
-          })()}
         </div>
       </div>
+
+      {/* Sticky add toolbar */}
+      {!isReadOnly && (() => {
+        const sel = selectedBlockId ? book.blocks.find((b) => b.id === selectedBlockId) : null
+        const canAddSection = sel?.level === "chapter"
+        const canAddDetails = sel?.level === "chapter" || sel?.level === "section"
+        return (
+          <div className="sticky bottom-0 z-20 flex items-center gap-1 flex-wrap rounded-xl border border-border bg-card/95 px-3 py-2 backdrop-blur-sm shadow-sm">
+            <button
+              onClick={addChapter}
+              className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground transition-colors"
+            >
+              <Plus className="size-4" />
+              Add Chapter
+            </button>
+            <button
+              onClick={addSection}
+              disabled={!canAddSection}
+              title={canAddSection ? undefined : "Select a chapter first"}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors",
+                canAddSection
+                  ? "text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground"
+                  : "text-muted-foreground/20 cursor-not-allowed",
+              )}
+            >
+              <Plus className="size-4" />
+              Add Section
+            </button>
+            <button
+              onClick={addDetails}
+              disabled={!canAddDetails}
+              title={canAddDetails ? undefined : "Select a chapter or section first"}
+              className={cn(
+                "flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition-colors",
+                canAddDetails
+                  ? "text-muted-foreground/60 hover:bg-muted/40 hover:text-muted-foreground"
+                  : "text-muted-foreground/20 cursor-not-allowed",
+              )}
+            >
+              <Plus className="size-4" />
+              Add Details
+            </button>
+          </div>
+        )
+      })()}
 
       {/* Share dialog */}
       {shareOpen && (
