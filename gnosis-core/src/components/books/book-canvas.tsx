@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
   ChevronLeft, GripVertical, Loader2, Plus, Share2,
-  Trash2, UserPlus, X,
+  Sparkles, Trash2, UserPlus, X,
 } from "lucide-react"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
@@ -209,6 +209,175 @@ function ShareDialog({ bookId, onClose }: { bookId: string; onClose: () => void 
   )
 }
 
+// ── AiOutlineDialog ───────────────────────────────────────────────────────────
+
+function AiOutlineDialog({
+  onClose,
+  onMerge,
+}: {
+  onClose: () => void
+  onMerge: (blocks: FlatBlock[]) => void
+}) {
+  const [prompt, setPrompt] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [draftBlocks, setDraftBlocks] = useState<FlatBlock[]>([])
+
+  async function generate() {
+    if (!prompt.trim() || loading) return
+    setLoading(true)
+    setError("")
+    try {
+      const res = await fetch("/api/books/ai-outline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: prompt.trim() }),
+      })
+      const data = await res.json() as { blocks?: FlatBlock[]; error?: string }
+      if (!res.ok) { setError(data.error ?? "Generation failed"); return }
+      setDraftBlocks(data.blocks ?? [])
+    } catch {
+      setError("Generation failed")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function updateDraftText(id: string, text: string) {
+    setDraftBlocks((prev) => prev.map((b) => (b.id === id ? { ...b, text } : b)))
+  }
+
+  function deleteDraftBlock(id: string) {
+    setDraftBlocks((prev) => prev.filter((b) => b.id !== id))
+  }
+
+  const hasDraft = draftBlocks.length > 0
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-xl flex flex-col max-h-[85vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4 shrink-0">
+          <div className="flex items-center gap-2">
+            <Sparkles className="size-4 text-primary" />
+            <h2 className="text-base font-semibold">AI Outline Generator</h2>
+          </div>
+          <Button variant="ghost" size="icon-xs" onClick={onClose}>
+            <X className="size-4" />
+          </Button>
+        </div>
+
+        {!hasDraft ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-muted-foreground">
+              Describe the grade, subject, and chapter — e.g.{" "}
+              <em>"Grade 5 Maths - Numbers"</em>
+            </p>
+            <textarea
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault()
+                  generate()
+                }
+              }}
+              placeholder="Grade 5 Maths - Numbers"
+              rows={3}
+              className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none focus:border-primary/60 placeholder:text-muted-foreground/40 resize-none"
+            />
+            {error && <p className="text-xs text-destructive">{error}</p>}
+            <Button onClick={generate} disabled={!prompt.trim() || loading}>
+              {loading ? (
+                <><Loader2 className="size-3.5 animate-spin mr-1.5" />Generating…</>
+              ) : (
+                <><Sparkles className="size-3.5 mr-1.5" />Generate Outline</>
+              )}
+            </Button>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground mb-3 shrink-0">
+              {draftBlocks.length} blocks generated. Edit below, then merge into your book.
+            </p>
+            <div className="flex-1 overflow-y-auto rounded-xl border border-border bg-background/50 p-3 space-y-0.5 min-h-0 mb-4">
+              {draftBlocks.map((block, index) => {
+                const indent = computeIndent(draftBlocks, index)
+                const isDetails = block.level === "details"
+                return (
+                  <div
+                    key={block.id}
+                    className={cn(
+                      "group flex items-start gap-1 rounded-lg px-2 py-1.5",
+                      block.level === "section" && "mt-2 border-l-2 border-primary/40",
+                    )}
+                  >
+                    {isDetails ? (
+                      <textarea
+                        value={block.text}
+                        rows={1}
+                        style={{ marginLeft: indent }}
+                        onChange={(e) => {
+                          updateDraftText(block.id, e.target.value)
+                          e.currentTarget.style.height = "auto"
+                          e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.height = "auto"
+                          e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
+                        }}
+                        className={cn(
+                          "flex-1 bg-transparent outline-none resize-none overflow-hidden",
+                          LEVEL_TEXT[block.level],
+                        )}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={block.text}
+                        style={{ marginLeft: indent }}
+                        onChange={(e) => updateDraftText(block.id, e.target.value)}
+                        className={cn(
+                          "flex-1 bg-transparent outline-none",
+                          LEVEL_TEXT[block.level],
+                        )}
+                      />
+                    )}
+                    <button
+                      onClick={() => deleteDraftBlock(block.id)}
+                      className="shrink-0 mt-0.5 text-muted-foreground/20 hover:text-destructive transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button variant="outline" size="sm" onClick={() => setDraftBlocks([])}>
+                ← Back
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={() => { onMerge(draftBlocks); onClose() }}
+                disabled={draftBlocks.length === 0}
+              >
+                Merge into Book ({draftBlocks.length})
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── BlockRow ──────────────────────────────────────────────────────────────────
 
 interface BlockRowProps {
@@ -366,6 +535,7 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
+  const [aiOpen, setAiOpen] = useState(false)
   const [presence, setPresence] = useState<PresenceEntry[]>([])
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
 
@@ -583,6 +753,13 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
     addBlock(selectedBlockId, "details")
   }
 
+  function mergeAiBlocks(newBlocks: FlatBlock[]) {
+    mutate((prev) => ({
+      ...prev,
+      blocks: [...prev.blocks, ...newBlocks.map((b) => ({ ...b, id: uid() }))],
+    }))
+  }
+
   function deleteBlock(id: string) {
     mutate((prev) => {
       if (prev.blocks.length <= 1) return prev
@@ -716,6 +893,20 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
             </div>
           )}
 
+          {/* AI Outline Generator */}
+          {!isReadOnly && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setAiOpen(true)}
+              title="AI Outline Generator"
+              className="shrink-0 gap-1.5 text-muted-foreground"
+            >
+              <Sparkles className="size-3.5" />
+              <span className="hidden sm:inline">AI Outline</span>
+            </Button>
+          )}
+
           {/* Save status */}
           <span className={cn(
             "shrink-0 text-xs",
@@ -819,6 +1010,14 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
       {/* Share dialog */}
       {shareOpen && (
         <ShareDialog bookId={book.id} onClose={() => setShareOpen(false)} />
+      )}
+
+      {/* AI Outline dialog */}
+      {aiOpen && (
+        <AiOutlineDialog
+          onClose={() => setAiOpen(false)}
+          onMerge={mergeAiBlocks}
+        />
       )}
     </>
   )
