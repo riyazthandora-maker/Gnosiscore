@@ -62,8 +62,8 @@ function shallowerLevel(level: BlockLevel): BlockLevel {
 
 const LEVEL_TEXT: Record<BlockLevel, string> = {
   chapter: "text-xl font-bold",
-  section: "text-base font-semibold",
-  details: "text-sm font-normal leading-relaxed",
+  section: "text-base font-semibold text-foreground",
+  details: "text-sm font-normal leading-relaxed text-muted-foreground",
 }
 
 const LEVEL_PLACEHOLDER: Record<BlockLevel, string> = {
@@ -262,6 +262,7 @@ function BlockRow({
       onMouseLeave={() => setHovered(false)}
       className={cn(
         "rounded-lg transition-colors",
+        block.level === "section" && "mt-2",
         isDragOver && !isDragging && "border-t-2 border-primary",
         isDragging && "opacity-30",
       )}
@@ -270,7 +271,8 @@ function BlockRow({
         className={cn(
           "flex gap-1 rounded-lg px-1 transition-colors",
           isDetails ? "items-start py-1.5" : "items-center py-1",
-          hovered && "bg-muted/40",
+          block.level === "section" && !presenceColor && "border-l-2 border-primary/40",
+          hovered && (block.level === "section" ? "bg-primary/5" : "bg-muted/40"),
         )}
         style={presenceColor
           ? { borderLeft: `3px solid ${presenceColor}`, paddingLeft: "5px" }
