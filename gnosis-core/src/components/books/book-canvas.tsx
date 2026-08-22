@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-  Check, ChevronLeft, GripVertical, Loader2, Paperclip, Plus, Share2, Sparkles,
+  ChevronLeft, GripVertical, Loader2, Plus, Share2,
   Trash2, UserPlus, X,
 } from "lucide-react"
 import type { RealtimeChannel } from "@supabase/supabase-js"
@@ -216,22 +216,14 @@ interface BlockRowProps {
   textIndent: number
   isDragOver: boolean
   isDragging: boolean
-  isGenerating: boolean
   isReadOnly: boolean
-  aiOpen: boolean
-  aiPrompt: string
   presenceColor: string | null
-  onAiPromptChange: (v: string) => void
-  onAiSubmit: () => void
-  onAiClose: () => void
   onTextChange: (id: string, text: string) => void
   onKeyDown: (e: React.KeyboardEvent<HTMLElement>, id: string) => void
   onDragStart: (id: string) => void
   onDragOver: (id: string) => void
   onDrop: (id: string) => void
   onDragEnd: () => void
-  onAIClick: (id: string) => void
-  onUploadClick: (id: string) => void
   onDelete: (id: string) => void
   onFocus: (id: string) => void
   onBlur: () => void
@@ -243,22 +235,14 @@ function BlockRow({
   textIndent,
   isDragOver,
   isDragging,
-  isGenerating,
   isReadOnly,
-  aiOpen,
-  aiPrompt,
   presenceColor,
-  onAiPromptChange,
-  onAiSubmit,
-  onAiClose,
   onTextChange,
   onKeyDown,
   onDragStart,
   onDragOver,
   onDrop,
   onDragEnd,
-  onAIClick,
-  onUploadClick,
   onDelete,
   onFocus,
   onBlur,
@@ -269,7 +253,7 @@ function BlockRow({
 
   return (
     <div
-      draggable={!isGenerating && !isReadOnly}
+      draggable={!isReadOnly}
       onDragStart={(e) => { e.stopPropagation(); onDragStart(block.id) }}
       onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); onDragOver(block.id) }}
       onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDrop(block.id) }}
@@ -287,7 +271,6 @@ function BlockRow({
           "flex gap-1 rounded-lg px-1 transition-colors",
           isDetails ? "items-start py-1.5" : "items-center py-1",
           hovered && "bg-muted/40",
-          isGenerating && "opacity-60",
         )}
         style={presenceColor
           ? { borderLeft: `3px solid ${presenceColor}`, paddingLeft: "5px" }
@@ -297,7 +280,7 @@ function BlockRow({
         <span className={cn(
           "shrink-0 cursor-grab p-0.5 text-muted-foreground/40 hover:text-muted-foreground transition-opacity",
           isDetails && "mt-0.5",
-          hovered && !isGenerating && !isReadOnly ? "opacity-100" : "opacity-0",
+          hovered && !isReadOnly ? "opacity-100" : "opacity-0",
         )}>
           <GripVertical className="size-4" />
         </span>
@@ -321,7 +304,7 @@ function BlockRow({
               e.currentTarget.style.height = `${e.currentTarget.scrollHeight}px`
             }}
             onBlur={onBlur}
-            disabled={isGenerating || isReadOnly}
+            disabled={isReadOnly}
             className={cn(
               "flex-1 bg-transparent outline-none placeholder:text-muted-foreground/35 disabled:cursor-default resize-none overflow-hidden",
               LEVEL_TEXT[block.level],
@@ -338,7 +321,7 @@ function BlockRow({
             onKeyDown={(e) => onKeyDown(e as React.KeyboardEvent<HTMLElement>, block.id)}
             onFocus={() => onFocus(block.id)}
             onBlur={onBlur}
-            disabled={isGenerating || isReadOnly}
+            disabled={isReadOnly}
             className={cn(
               "flex-1 bg-transparent outline-none placeholder:text-muted-foreground/35 disabled:cursor-default",
               LEVEL_TEXT[block.level],
@@ -349,40 +332,13 @@ function BlockRow({
         {!isReadOnly && (
           <div className={cn(
             "flex shrink-0 items-center gap-0.5 transition-opacity",
-            hovered || aiOpen || isGenerating ? "opacity-100" : "opacity-0 pointer-events-none",
+            hovered ? "opacity-100" : "opacity-0 pointer-events-none",
           )}>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className={cn(
-                "text-muted-foreground",
-                isGenerating ? "text-primary" : "hover:text-primary",
-              )}
-              onClick={() => !isGenerating && onAIClick(block.id)}
-              disabled={isGenerating}
-              title="AI assist"
-            >
-              {isGenerating
-                ? <Loader2 className="size-3.5 animate-spin" />
-                : <Sparkles className="size-3.5" />
-              }
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="text-muted-foreground hover:text-primary"
-              onClick={() => onUploadClick(block.id)}
-              disabled={isGenerating}
-              title="Upload file"
-            >
-              <Paperclip className="size-3.5" />
-            </Button>
             <Button
               variant="ghost"
               size="icon-xs"
               className="text-muted-foreground hover:text-destructive"
               onClick={() => onDelete(block.id)}
-              disabled={isGenerating}
               title="Delete block"
             >
               <Trash2 className="size-3.5" />
@@ -390,33 +346,6 @@ function BlockRow({
           </div>
         )}
       </div>
-
-      {aiOpen && (
-        <div
-          className="flex items-center gap-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2 mt-0.5 mb-1"
-          style={{ marginLeft: textIndent + 24 }}
-        >
-          <Sparkles className="size-3.5 shrink-0 text-primary" />
-          <input
-            autoFocus
-            type="text"
-            value={aiPrompt}
-            onChange={(e) => onAiPromptChange(e.target.value)}
-            placeholder="Describe what to generate here…"
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
-            onKeyDown={(e) => {
-              if (e.key === "Escape") onAiClose()
-              if (e.key === "Enter") onAiSubmit()
-            }}
-          />
-          <Button variant="ghost" size="icon-xs" onClick={onAiClose}>
-            <X className="size-3" />
-          </Button>
-          <Button variant="ghost" size="icon-xs" className="text-primary" onClick={onAiSubmit}>
-            <Check className="size-3" />
-          </Button>
-        </div>
-      )}
     </div>
   )
 }
@@ -431,10 +360,6 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
   const [loaded, setLoaded] = useState(false)
   const [notFound, setNotFound] = useState(false)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved")
-  const [aiBlockId, setAiBlockId] = useState<string | null>(null)
-  const [aiPrompt, setAiPrompt] = useState("")
-  const [generatingId, setGeneratingId] = useState<string | null>(null)
-  const [uploadTargetId, setUploadTargetId] = useState<string | null>(null)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const [shareOpen, setShareOpen] = useState(false)
@@ -442,7 +367,6 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
 
   const inputRefs = useRef<Map<string, HTMLInputElement | HTMLTextAreaElement>>(new Map())
-  const fileInputRef = useRef<HTMLInputElement>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
   const myInfoRef = useRef<PresenceEntry>({
@@ -621,67 +545,6 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
 
   function focusBlock(id: string) {
     setTimeout(() => inputRefs.current.get(id)?.focus(), 0)
-  }
-
-  // ── AI generation ────────────────────────────────────────────────────────────
-
-  function insertBlocks(afterId: string, newBlocks: { level: BlockLevel; text: string }[]) {
-    const toInsert: FlatBlock[] = newBlocks.map((b) => ({ id: uid(), level: b.level, text: b.text }))
-    mutate((prev) => {
-      const idx = prev.blocks.findIndex((b) => b.id === afterId)
-      const next = [...prev.blocks]
-      next.splice(idx + 1, 0, ...toInsert)
-      return { ...prev, blocks: next }
-    })
-  }
-
-  async function generateFromPrompt(blockId: string, prompt: string) {
-    const block = book?.blocks.find((b) => b.id === blockId)
-    if (!block) return
-    setAiBlockId(null)
-    setAiPrompt("")
-    setGeneratingId(blockId)
-    try {
-      const res = await fetch("/api/books/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          blockLevel: block.level,
-          blockText: block.text,
-          prompt,
-          bookTitle: book?.title ?? "",
-        }),
-      })
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? "Generation failed")
-      const { blocks } = await res.json() as { blocks: { level: BlockLevel; text: string }[] }
-      insertBlocks(blockId, blocks)
-    } catch (err) {
-      console.error("[book-canvas] AI generation error:", err)
-    } finally {
-      setGeneratingId(null)
-    }
-  }
-
-  async function generateFromFile(blockId: string, file: File) {
-    const block = book?.blocks.find((b) => b.id === blockId)
-    if (!block) return
-    setGeneratingId(blockId)
-    try {
-      const formData = new FormData()
-      formData.append("blockLevel", block.level)
-      formData.append("blockText", block.text)
-      formData.append("bookTitle", book?.title ?? "")
-      formData.append("file", file)
-      const res = await fetch("/api/books/generate", { method: "POST", body: formData })
-      if (!res.ok) throw new Error("Generation failed")
-      const { blocks } = await res.json() as { blocks: { level: BlockLevel; text: string }[] }
-      insertBlocks(blockId, blocks)
-    } catch (err) {
-      console.error("[book-canvas] File generation error:", err)
-    } finally {
-      setGeneratingId(null)
-      setUploadTargetId(null)
-    }
   }
 
   // ── Block mutations ──────────────────────────────────────────────────────────
@@ -883,28 +746,14 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
               textIndent={computeIndent(book.blocks, index)}
               isDragOver={dragOverId === block.id}
               isDragging={draggingId === block.id}
-              isGenerating={generatingId === block.id}
               isReadOnly={isReadOnly}
-              aiOpen={aiBlockId === block.id}
-              aiPrompt={aiPrompt}
               presenceColor={presenceColorForBlock(block.id)}
-              onAiPromptChange={setAiPrompt}
-              onAiSubmit={() => generateFromPrompt(block.id, aiPrompt)}
-              onAiClose={() => { setAiBlockId(null); setAiPrompt("") }}
               onTextChange={handleTextChange}
               onKeyDown={handleKeyDown}
               onDragStart={setDraggingId}
               onDragOver={setDragOverId}
               onDrop={handleDrop}
               onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
-              onAIClick={(id) => {
-                setAiBlockId((prev) => (prev === id ? null : id))
-                setAiPrompt("")
-              }}
-              onUploadClick={(id) => {
-                setUploadTargetId(id)
-                fileInputRef.current?.click()
-              }}
               onDelete={deleteBlock}
               onFocus={handleBlockFocus}
               onBlur={handleBlockBlur}
@@ -961,19 +810,6 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
           })()}
         </div>
       </div>
-
-      {/* Hidden file input */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf,.txt,.md,image/*"
-        className="hidden"
-        onChange={async (e) => {
-          const file = e.target.files?.[0]
-          if (file && uploadTargetId) await generateFromFile(uploadTargetId, file)
-          e.target.value = ""
-        }}
-      />
 
       {/* Share dialog */}
       {shareOpen && (
