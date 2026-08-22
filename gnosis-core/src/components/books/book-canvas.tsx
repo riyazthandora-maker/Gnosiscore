@@ -248,7 +248,17 @@ function AiOutlineDialog({
   }
 
   function deleteDraftBlock(id: string) {
-    setDraftBlocks((prev) => prev.filter((b) => b.id !== id))
+    setDraftBlocks((prev) => {
+      const idx = prev.findIndex((b) => b.id === id)
+      if (idx === -1) return prev
+      if (prev[idx].level === "section") {
+        // delete the section and all immediately following details blocks
+        let end = idx + 1
+        while (end < prev.length && prev[end].level === "details") end++
+        return [...prev.slice(0, idx), ...prev.slice(end)]
+      }
+      return prev.filter((b) => b.id !== id)
+    })
   }
 
   const hasDraft = draftBlocks.length > 0
