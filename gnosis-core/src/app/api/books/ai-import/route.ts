@@ -73,9 +73,11 @@ function jsonToBlocks(chapters: OutlineChapter[]): FlatBlock[] {
 async function extractPdfText(buffer: Buffer): Promise<string> {
   // Import the internal module directly to avoid pdf-parse loading its test fixture
   // (./test/data/05-versions-space.pdf) on import, which throws ENOENT in Next.js.
-  // Cast to the main package's type since the internal path has no declarations.
-  type PdfParseFn = (typeof import("pdf-parse"))["default"]
-  const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default as unknown as PdfParseFn
+  // pdf-parse uses `export =` so the module IS the function — cast via any to avoid
+  // TypeScript complaining about a missing `.default` key on an `export =` type.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfParse: (buf: Buffer) => Promise<{ text?: string }> =
+    (await (import("pdf-parse/lib/pdf-parse.js") as Promise<any>)).default
   const data = await pdfParse(buffer)
   return data.text?.trim() ?? ""
 }
