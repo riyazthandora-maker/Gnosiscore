@@ -70,14 +70,6 @@ function jsonToBlocks(chapters: OutlineChapter[]): FlatBlock[] {
   return blocks
 }
 
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  // Import the internal module directly to avoid pdf-parse loading its test fixture
-  // (./test/data/05-versions-space.pdf) on import, which throws ENOENT in Next.js.
-  const { default: pdfParse } = await import("pdf-parse/lib/pdf-parse.js")
-  const data = await pdfParse(buffer)
-  return data.text?.trim() ?? ""
-}
-
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -102,26 +94,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Total upload exceeds the 7 MB batch limit" }, { status: 400 })
     }
 
-    // Build Gemini content parts: images inline, PDFs as extracted text
+    // Send all files to Gemini as inline_data — PDFs and images are both
+    // natively understood by the model, avoiding font-encoding issues with pdf-parse.
     const parts: Record<string, unknown>[] = []
-    const pdfTexts: string[] = []
 
     for (const file of fileEntries) {
       const bytes = Buffer.from(await file.arrayBuffer())
-      const mime = file.type
-      const name = file.name.toLowerCase()
+      const mime = file.type || (file.name.toLowerCase().endsWith(".pdf") ? "application/pdf" : "application/octet-stream")
 
-      if (mime.startsWith("image/")) {
+      if (mime.startsWith("image/") || mime === "application/pdf") {
         parts.push({ inline_data: { mime_type: mime, data: bytes.toString("base64") } })
-      } else if (mime === "application/pdf" || name.endsWith(".pdf")) {
-        const text = await extractPdfText(bytes)
-        console.log(`[ai-import] "${file.name}" mime=${mime} size=${bytes.length} extractedChars=${text.length}`)
-        if (text) pdfTexts.push(`[File: ${file.name}]\n${text.slice(0, 8000)}`)
       }
-    }
-
-    if (pdfTexts.length > 0) {
-      parts.push({ text: `Extracted document text:\n\n${pdfTexts.join("\n\n---\n\n")}` })
     }
 
     if (parts.length === 0) {
