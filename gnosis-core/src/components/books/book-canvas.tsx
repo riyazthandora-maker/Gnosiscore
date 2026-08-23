@@ -60,6 +60,24 @@ function shallowerLevel(level: BlockLevel): BlockLevel {
   return LEVELS[Math.max(LEVELS.indexOf(level) - 1, 0)]
 }
 
+// End index (exclusive) of the range [idx, end) that must be removed so a
+// deleted chapter/section also removes everything nested under it in the
+// flat hierarchy: a chapter owns everything until the next chapter, and a
+// section owns the details blocks until the next section or chapter.
+function cascadeEnd(blocks: FlatBlock[], idx: number): number {
+  if (blocks[idx].level === "chapter") {
+    let end = idx + 1
+    while (end < blocks.length && blocks[end].level !== "chapter") end++
+    return end
+  }
+  if (blocks[idx].level === "section") {
+    let end = idx + 1
+    while (end < blocks.length && blocks[end].level === "details") end++
+    return end
+  }
+  return idx + 1
+}
+
 const PER_FILE_MAX = 4 * 1024 * 1024
 const BATCH_MAX = 7 * 1024 * 1024
 
@@ -259,13 +277,8 @@ function AiOutlineDialog({
     setDraftBlocks((prev) => {
       const idx = prev.findIndex((b) => b.id === id)
       if (idx === -1) return prev
-      if (prev[idx].level === "section") {
-        // delete the section and all immediately following details blocks
-        let end = idx + 1
-        while (end < prev.length && prev[end].level === "details") end++
-        return [...prev.slice(0, idx), ...prev.slice(end)]
-      }
-      return prev.filter((b) => b.id !== id)
+      const end = cascadeEnd(prev, idx)
+      return [...prev.slice(0, idx), ...prev.slice(end)]
     })
   }
 
@@ -457,12 +470,8 @@ function ImportDialog({
     setDraftBlocks((prev) => {
       const idx = prev.findIndex((b) => b.id === id)
       if (idx === -1) return prev
-      if (prev[idx].level === "section") {
-        let end = idx + 1
-        while (end < prev.length && prev[end].level === "details") end++
-        return [...prev.slice(0, idx), ...prev.slice(end)]
-      }
-      return prev.filter((b) => b.id !== id)
+      const end = cascadeEnd(prev, idx)
+      return [...prev.slice(0, idx), ...prev.slice(end)]
     })
   }
 
@@ -1000,9 +1009,11 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
 
   function deleteBlock(id: string) {
     mutate((prev) => {
-      if (prev.blocks.length <= 1) return prev
       const idx = prev.blocks.findIndex((b) => b.id === id)
-      const next = prev.blocks.filter((b) => b.id !== id)
+      if (idx === -1) return prev
+      const end = cascadeEnd(prev.blocks, idx)
+      const next = [...prev.blocks.slice(0, idx), ...prev.blocks.slice(end)]
+      if (next.length === 0) return prev
       const focusIdx = Math.max(0, idx - 1)
       setTimeout(() => { if (next[focusIdx]) inputRefs.current.get(next[focusIdx].id)?.focus() }, 0)
       return { ...prev, blocks: next }
