@@ -71,7 +71,9 @@ function jsonToBlocks(chapters: OutlineChapter[]): FlatBlock[] {
 }
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
-  const pdfParse = (await import("pdf-parse")).default
+  // Import the internal module directly to avoid pdf-parse loading its test fixture
+  // (./test/data/05-versions-space.pdf) on import, which throws ENOENT in Next.js
+  const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default
   const data = await pdfParse(buffer)
   return data.text?.trim() ?? ""
 }
