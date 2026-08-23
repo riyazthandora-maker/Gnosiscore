@@ -115,6 +115,7 @@ export async function POST(req: NextRequest) {
         parts.push({ inline_data: { mime_type: mime, data: bytes.toString("base64") } })
       } else if (mime === "application/pdf" || name.endsWith(".pdf")) {
         const text = await extractPdfText(bytes)
+        console.log(`[ai-import] "${file.name}" mime=${mime} size=${bytes.length} extractedChars=${text.length}`)
         if (text) pdfTexts.push(`[File: ${file.name}]\n${text.slice(0, 8000)}`)
       }
     }
