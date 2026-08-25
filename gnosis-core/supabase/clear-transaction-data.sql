@@ -7,8 +7,10 @@
 --   tests, test_assignments, test_attempts, notifications,
 --   books, book_collaborators, chapters
 -- plus legacy tables (responses, test_configs, test_invitations,
---   diagnostic_reports, dashboard_shares) if they still exist,
--- plus the actual uploaded files in the storage "documents" bucket.
+--   diagnostic_reports, dashboard_shares) if they still exist.
+--
+-- NOTE: uploaded files in the "documents" storage bucket are NOT deleted
+-- here — see section 2 for how to clear them (Storage API / dashboard UI).
 --
 -- KEEPS (account / reference data):
 --   users, platform_settings, educator_students
@@ -57,17 +59,12 @@ BEGIN
 END $$;
 
 -- ── 2. Actual uploaded files in storage ──────────────────────
--- Removes the files; keeps the "documents" bucket definition.
-DO $$
-DECLARE
-  n BIGINT;
-BEGIN
-  IF to_regclass('storage.objects') IS NOT NULL THEN
-    DELETE FROM storage.objects WHERE bucket_id = 'documents';
-    GET DIAGNOSTICS n = ROW_COUNT;
-    RAISE NOTICE 'Cleared storage.objects for bucket "documents" (% files)', n;
-  END IF;
-END $$;
+-- NOT handled here. Supabase rejects direct SQL writes to storage.objects
+-- ("Use the Storage API instead") and the SQL editor role can't disable
+-- the guard triggers ("must be owner of table objects"). Clear the bucket
+-- with either:
+--   • Dashboard → Storage → documents → select all → Delete, or
+--   • node supabase/clear-storage.mjs   (Storage API + service role key)
 
 -- ── 3. Reset per-user token consumption counters ─────────────
 -- Part of the transactional accounting — comment out if unwanted.
