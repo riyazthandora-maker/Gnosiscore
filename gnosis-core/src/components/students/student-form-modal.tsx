@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useRef, useState } from "react"
 import { X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { CreatableGradeSelect } from "@/components/students/creatable-grade-select"
@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils"
 import type { RosterEntry, StudentGrade } from "@/types"
 
 interface Props {
-  open: boolean
   onClose: () => void
   onSave: (data: {
     name: string
@@ -28,28 +27,16 @@ const INPUT_CLS = cn(
   "focus:ring-2 focus:ring-ring/50 focus:border-ring transition-colors"
 )
 
-export function StudentFormModal({ open, onClose, onSave, onCreateGrade, grades, entry }: Props) {
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [phone, setPhone] = useState("")
-  const [gradeId, setGradeId] = useState<string | null>(null)
-  const [gradeName, setGradeName] = useState<string | undefined>(undefined)
+export function StudentFormModal({ onClose, onSave, onCreateGrade, grades, entry }: Props) {
+  const [name, setName] = useState(entry?.name ?? "")
+  const [email, setEmail] = useState(entry?.email ?? "")
+  const [phone, setPhone] = useState(entry?.phone ?? "")
+  const [gradeId, setGradeId] = useState<string | null>(entry?.grade_id ?? null)
+  const [gradeName, setGradeName] = useState<string | undefined>(entry?.grade?.name ?? undefined)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const nameRef = useRef<HTMLInputElement>(null)
   const isEdit = !!entry
-
-  useEffect(() => {
-    if (open) {
-      setName(entry?.name ?? "")
-      setEmail(entry?.email ?? "")
-      setPhone(entry?.phone ?? "")
-      setGradeId(entry?.grade_id ?? null)
-      setGradeName(entry?.grade?.name ?? undefined)
-      setError("")
-      setTimeout(() => nameRef.current?.focus(), 50)
-    }
-  }, [open, entry])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -69,8 +56,6 @@ export function StudentFormModal({ open, onClose, onSave, onCreateGrade, grades,
     setGradeId(id)
     setGradeName(name)
   }
-
-  if (!open) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -98,6 +83,7 @@ export function StudentFormModal({ open, onClose, onSave, onCreateGrade, grades,
               onChange={(e) => setName(e.target.value)}
               placeholder="e.g. Arjun Sharma"
               required
+              autoFocus
               className={INPUT_CLS}
             />
           </div>

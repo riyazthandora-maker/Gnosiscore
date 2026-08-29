@@ -272,14 +272,15 @@ export default function StudentsPage() {
       )}
 
       {/* Modals */}
-      <StudentFormModal
-        open={formOpen}
-        onClose={() => setFormOpen(false)}
-        onSave={handleSave}
-        onCreateGrade={handleCreateGrade}
-        grades={grades}
-        entry={editEntry}
-      />
+      {formOpen && (
+        <StudentFormModal
+          onClose={() => setFormOpen(false)}
+          onSave={handleSave}
+          onCreateGrade={handleCreateGrade}
+          grades={grades}
+          entry={editEntry}
+        />
+      )}
       <GradeManagerModal
         open={gradeManagerOpen}
         onClose={() => setGradeManagerOpen(false)}
