@@ -1,5 +1,4 @@
 import { createAdminClient } from "@/lib/supabase/admin"
-import type { EffectiveLimits } from "@/types"
 
 export interface PlatformSettings {
   file_size_limit_bytes: number
@@ -32,24 +31,6 @@ export async function getPlatformSettings(): Promise<PlatformSettings> {
     return { ...DEFAULTS, ...(data ?? {}) }
   } catch {
     return DEFAULTS
-  }
-}
-
-export async function getEffectiveLimits(userId: string): Promise<EffectiveLimits> {
-  const adminDb = createAdminClient()
-  const [platform, { data: userRow }] = await Promise.all([
-    getPlatformSettings(),
-    adminDb
-      .from("users")
-      .select("storage_limit_bytes, doc_size_limit_bytes, max_docs_per_chapter, monthly_upload_limit")
-      .eq("id", userId)
-      .single(),
-  ])
-  return {
-    doc_size_limit_bytes: userRow?.doc_size_limit_bytes ?? platform.file_size_limit_bytes,
-    max_docs_per_chapter: userRow?.max_docs_per_chapter ?? platform.max_docs_per_chapter,
-    storage_limit_bytes:  userRow?.storage_limit_bytes  ?? platform.max_storage_bytes,
-    monthly_upload_limit: userRow?.monthly_upload_limit ?? platform.monthly_upload_limit,
   }
 }
 

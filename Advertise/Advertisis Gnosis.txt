@@ -1,0 +1,23 @@
+Please modify the landing page (home page) of GnosisCore to integrate a new, high-converting section targeted specifically at parents (with a strong focus on the UAE and Middle East market context). 
+
+Make the following changes:
+
+1. HERO SECTION CTA UPDATE:
+   - Add a prominent secondary button or update the primary CTA in the hero section to read: "Explore Parent Weekly Plans (AED 100/mo)" linked to a parent subscription section or checkout flow.
+
+2. ADD A NEW "FOR PARENTS: WEEKLY AI ASSIGNMENTS & DIAGNOSTICS" SECTION:
+   - Insert a dedicated section on the home page highlighting the parent offering.
+   - Headline: "Take Control of Your Child's Academic Success Every Single Week"
+   - Subheadline: "Built for IGCSE, IB, and American Curriculum students in the UAE. Get 100+ weekly practice questions per subject and automated AI diagnostic reports delivered straight to your inbox."
+   - Pricing Callout: Highlight "AED 100 / month" clearly.
+   - Feature bullets:
+     * 100+ AI-generated questions tailored to school study materials weekly.
+     * Deep diagnostic reports pinpointing exact strengths and conceptual gaps.
+     * Zero private-tutor hassle—track progress from your phone.
+   - Action Button: "Get Started for Free Diagnostic Test"
+
+3. TRUST & LOCALIZATION ELEMENTS:
+   - Add a badge or sub-text indicating support for regional curricula (British IGCSE, IB, American).
+   - Include a placeholder for WhatsApp instant support contact info (+91 9846 949940) in the footer or near the CTA.
+
+Please update the HTML/Tailwind (or existing framework code) cleanly while maintaining the existing minimal, professional design style of GnosisCore.

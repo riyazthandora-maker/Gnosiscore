@@ -1,0 +1,18 @@
+
+> gnosis-core@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.70.101:3000
+- Environments: .env.local
+✓ Ready in 16.5s
+⨯ Another next dev server is already running.
+
+- Local:        http://localhost:3001
+- PID:          25412
+- Dir:          D:\Users\Riyaz\Projects\GnosisCore\gnosis-core
+- Log:          .next\dev\logs\next-development.log
+
+Run taskkill /PID 25412 /F to stop it.
+[?25h

@@ -174,13 +174,6 @@ export interface ChapterWithStats extends Chapter {
   storage_bytes: number
 }
 
-export interface EffectiveLimits {
-  doc_size_limit_bytes: number
-  max_docs_per_chapter: number
-  storage_limit_bytes: number
-  monthly_upload_limit: number
-}
-
 export const FILE_LIMITS = {
   perFile: 4 * 1024 * 1024,        // 4 MB
   perTransaction: 20 * 1024 * 1024, // 20 MB

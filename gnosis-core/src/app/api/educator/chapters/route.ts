@@ -96,31 +96,3 @@ export async function GET(request: Request) {
     monthly_uploads_used: monthlyCount ?? 0,
   })
 }
-
-export async function POST(request: Request) {
-  const supabase = await createClient()
-  const user = await getEducator(supabase)
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-  const body = await request.json() as { name?: string }
-  const name = body.name?.trim() ?? ""
-
-  if (!name) return NextResponse.json({ error: "Chapter name is required." }, { status: 400 })
-  if (name.length > 120) return NextResponse.json({ error: "Chapter name must be 120 characters or fewer." }, { status: 400 })
-
-  const { data, error } = await supabase
-    .from("chapters")
-    .insert({ user_id: user.id, name })
-    .select("id, name, created_at")
-    .single()
-
-  if (error) {
-    if (error.code === "23505") {
-      return NextResponse.json({ error: "A chapter with this name already exists." }, { status: 409 })
-    }
-    console.error("[chapters POST]", error.message)
-    return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  return NextResponse.json({ chapter: data }, { status: 201 })
-}

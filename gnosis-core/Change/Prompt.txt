@@ -1,0 +1,60 @@
+Act as a Principal Full-Stack Engineer. Let's implement the Chapter and Document Management module for GnosisCore.ai with the following precise rules:
+
+1. Unique Chapter Naming: Each teacher/parent user can create unique Chapter names (unique per user ID).
+2. Multi-Document Upload: Users can upload multiple documents against a specific chapter name using an "Upload More" button.
+3. Storage & Limits:
+   - Default max size per individual document: 4 MB.
+   - Default max number of documents per chapter: 10.
+   - Default total cumulative storage limit per teacher: 200 MB.
+   - Monthly upload count limit: Max 100 individual document uploads per month.
+   - Admin Configurability: All the above limits (per-document size, max documents per chapter, total storage pool, and monthly upload count) must be configurable by the Admin on an individual user ID basis.
+4. Deletion & Storage Recovery: Users must be able to delete any chapter name they created. Deleting a chapter must automatically cascade-delete all associated uploaded documents and instantly free up the consumed space from the user's total storage pool.
+5. UI Constraint: Ensure all lists and management views are mobile-friendly, with a maximum of 15 items per list view before pagination kicks in.
+
+Please provide the database schema updates, backend validation logic, and frontend API handling for this module.
+
+Act as a Principal Full-Stack Engineer. Let's build the revamped "Generate Test" page for GnosisCore.ai, replacing the old multi-step process with a streamlined workflow:
+
+1. Test Identification: The user provides a unique Test Name (e.g., Class Test, Quarterly Test).
+2. Chapter Selection: The user selects one or more previously created Chapter names created earlier.
+3. Prompt & Source Blending: 
+   - A text box is provided for custom prompt generation.
+   - A percentage input field determines the mix of questions derived from the prompt vs. uploaded chapters.
+   - Rule: If prompt-only is used (no chapters selected), the percentage is locked at 100% prompt. If chapters are selected, the default prompt mix percentage is 20% (with 80% from documents), but the user can freely edit this percentage value on screen.
+4. Toughness Level Slider: 
+   - A horizontal range slider from 0% to 100%.
+   - 0% indicates an easy test, 100% indicates a hard test, and intermediate values represent the ratio of hard-to-easy questions (e.g., 20% means 20% hard questions and 80% easy questions).
+5. Question Count & Admin Approval:
+   - A numerical field/slider for the total number of questions. Default value: 20.
+   - Governance Rule: Any request for more than 20 questions triggers a "Pending Admin Approval" workflow. This threshold (default 20) must be configurable by the Admin per individual teacher account.
+6. Anti-Hallucination & Token Optimization: The system must verify source context before generation, utilizing lightweight Markdown conversions to optimize token consumption.
+
+Please provide the backend generation pipeline logic, UI layout code, and approval state-machine schema.
+
+Act as a Principal Full-Stack Engineer. Let's build the Question Review and Editing screen for GnosisCore.org:
+
+1. Purpose: Right after the test generation engine produces the questions (and assuming any high-volume >20 question approvals are met), the user is routed to a dedicated review screen before final publishing.
+2. Editing Capabilities: 
+   - Teachers/parents can view all generated questions and their corresponding options/answers.
+   - Inline editing capability to modify question text, choices, correct answers, and difficulty weights.
+3. Deletion Capability: Ability to delete specific unwanted questions from the set.
+4. Finalize: A confirmation action that saves the finalized question set, locking it in preparation for assignment to students.
+5. Mobile Responsiveness: Ensure the review interface is fully responsive, clean, and easy to navigate on mobile devices.
+
+Please provide the frontend UI components and backend CRUD logic for modifying generated test items.
+
+Act as a Principal Full-Stack Engineer. Let's build the Test Assigning page for GnosisCore.org with these exact parameters:
+
+1. Test Selection: A dropdown field to select one or more tests generated from the Test Generation page. The dropdown values must display key attributes such as total number of questions and toughness level.
+2. Time Allocation: Number of minutes allocated for the test. 
+   - Value of '0' means no time limit.
+   - Default value: 20 minutes.
+3. Timer Visibility: If minutes are non-zero, display a toggle option asking whether to show the active countdown timer to students while taking the test.
+4. Answer Key Visibility: An option toggle to show the answer key immediately at the end of the test or hide it.
+5. Retake Policy: An option toggle allowing students to retake the same test multiple times or restrict it to a single attempt.
+6. Scheduling Windows: 
+   - Start Date & Time: The exact timestamp when the test becomes visible and accessible for students to start.
+   - End Date & Time: The expiration timestamp beyond which the exam must remove from the student portal.
+7. Mobile Optimization: Clean UI layout adhering to mobile-first design principles.
+
+Please provide the database schema for test assignments, backend scheduling validation logic, and the student-facing view restrictions.
