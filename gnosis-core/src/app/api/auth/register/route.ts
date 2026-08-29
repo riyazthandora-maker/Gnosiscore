@@ -101,6 +101,13 @@ export async function POST(request: Request) {
       }
     }
 
+    // Auto-link any pending roster invites for this student email
+    if (!createErr && role === "student") {
+      autoLinkRosterInvites(supabase, email.trim().toLowerCase()).catch(
+        (err: unknown) => console.error("[register] roster auto-link failed:", (err as Error)?.message)
+      )
+    }
+
     return NextResponse.json({ success: true })
   }
 
@@ -164,5 +171,52 @@ export async function POST(request: Request) {
     }
   }
 
+  // Auto-link any pending roster invites for this student email
+  if (!createErr && role === "student") {
+    autoLinkRosterInvites(supabase, email.trim().toLowerCase()).catch(
+      (err: unknown) => console.error("[register] roster auto-link failed:", (err as Error)?.message)
+    )
+  }
+
   return NextResponse.json({ success: true })
+}
+
+async function autoLinkRosterInvites(
+  adminDb: ReturnType<typeof createAdminClient>,
+  normalizedEmail: string
+): Promise<void> {
+  const { data: pending } = await adminDb
+    .from("student_roster")
+    .select("id, teacher_id")
+    .eq("email", normalizedEmail)
+    .eq("status", "invited")
+
+  if (!pending || pending.length === 0) return
+
+  const { data: newUser } = await adminDb
+    .from("users")
+    .select("id")
+    .eq("email", normalizedEmail)
+    .single()
+
+  if (!newUser?.id) return
+
+  for (const entry of pending) {
+    await adminDb
+      .from("student_roster")
+      .update({
+        student_user_id: newUser.id,
+        status: "active",
+        invite_token: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", entry.id)
+
+    await adminDb
+      .from("educator_students")
+      .upsert(
+        { educator_id: entry.teacher_id, student_id: newUser.id },
+        { onConflict: "educator_id,student_id" }
+      )
+  }
 }

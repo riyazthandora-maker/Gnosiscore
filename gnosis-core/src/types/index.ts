@@ -174,6 +174,32 @@ export interface ChapterWithStats extends Chapter {
   storage_bytes: number
 }
 
+// ── STUDENT MANAGEMENT ───────────────────────────────────────
+export type RosterStatus = 'invited' | 'active' | 'archived'
+
+export interface StudentGrade {
+  id: string
+  teacher_id: string
+  name: string
+  created_at: string
+}
+
+export interface RosterEntry {
+  id: string
+  teacher_id: string
+  student_user_id: string | null
+  name: string
+  email: string
+  phone: string | null
+  grade_id: string | null
+  grade: StudentGrade | null
+  status: RosterStatus
+  invite_token: string | null
+  invite_expires_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export const FILE_LIMITS = {
   perFile: 4 * 1024 * 1024,        // 4 MB
   perTransaction: 20 * 1024 * 1024, // 20 MB
