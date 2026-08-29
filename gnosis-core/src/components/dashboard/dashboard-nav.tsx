@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { BarChart3, BookOpen, ClipboardList, GraduationCap, LayoutDashboard, LogOut, Menu, NotebookPen, Settings, X } from "lucide-react"
+import { BarChart3, ClipboardList, GraduationCap, LayoutDashboard, LogOut, Menu, NotebookPen, Settings, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/shared/theme-toggle"
@@ -13,7 +13,6 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/books", label: "Books", icon: NotebookPen },
   { href: "/students", label: "Students", icon: GraduationCap },
-  { href: "/tests", label: "Tests", icon: BookOpen },
   { href: "/assignments", label: "Assignments", icon: ClipboardList },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
