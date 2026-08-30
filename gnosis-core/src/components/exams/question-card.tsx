@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { Trash2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { renderMixed } from "@/lib/exam/katex-utils"
 import type { ExamQuestion } from "@/types"
 
 const OPTION_KEYS = ["A", "B", "C", "D"] as const
@@ -30,23 +31,6 @@ function KatexSpan({ text }: { text: string }) {
   return <span ref={ref} />
 }
 
-function renderMixed(text: string, katex: typeof import("katex").default): string {
-  // Handle $$...$$ (display) then $...$ (inline)
-  const parts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$))/g)
-  return parts.map(part => {
-    if (part.startsWith("$$") && part.endsWith("$$")) {
-      try {
-        return katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false })
-      } catch { return part }
-    }
-    if (part.startsWith("$") && part.endsWith("$")) {
-      try {
-        return katex.renderToString(part.slice(1, -1), { displayMode: false, throwOnError: false })
-      } catch { return part }
-    }
-    return part.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  }).join("")
-}
 
 export function QuestionCard({ question, index, onChange, onDelete }: Props) {
   const [preview, setPreview] = useState(false)

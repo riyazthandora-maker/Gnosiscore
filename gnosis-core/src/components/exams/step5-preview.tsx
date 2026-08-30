@@ -5,9 +5,10 @@ import { Printer } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useWizard } from "@/components/exams/wizard-context"
+import { renderMixed } from "@/lib/exam/katex-utils"
 import type { ExamQuestion } from "@/types"
 
-// ── KaTeX rendering ───────────────────────────────────────────────────────────
+// ── KaTeX renderer hook ───────────────────────────────────────────────────────
 
 function useKatexRenderer() {
   const [katex, setKatex] = useState<typeof import("katex").default | null>(null)
@@ -15,21 +16,6 @@ function useKatexRenderer() {
     import("katex").then(m => setKatex(m.default))
   }, [])
   return katex
-}
-
-function renderMixed(text: string, katex: typeof import("katex").default): string {
-  const parts = text.split(/((?:\$\$[\s\S]+?\$\$|\$[^$\n]+?\$))/g)
-  return parts.map(part => {
-    if (part.startsWith("$$") && part.endsWith("$$")) {
-      try { return katex.renderToString(part.slice(2, -2), { displayMode: true, throwOnError: false }) }
-      catch { return part }
-    }
-    if (part.startsWith("$") && part.endsWith("$")) {
-      try { return katex.renderToString(part.slice(1, -1), { displayMode: false, throwOnError: false }) }
-      catch { return part }
-    }
-    return part.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-  }).join("")
 }
 
 function KatexText({ text, katex }: { text: string; katex: typeof import("katex").default | null }) {
