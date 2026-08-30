@@ -1,3 +1,34 @@
+export type ExamDifficulty = 'easy' | 'hard'
+
+export interface ExamQuestion {
+  id: string
+  body: string
+  options: { A: string; B: string; C: string; D: string }
+  correct: 'A' | 'B' | 'C' | 'D'
+  difficulty: ExamDifficulty
+  explanation: string
+  topic: string
+}
+
+export interface ExamSourceMeta {
+  books: Array<{
+    id: string
+    title: string
+    selected_blocks: Array<{ id: string; level: string; text: string }>
+  }>
+  weightages: Record<string, number>
+  settings: { total: number; easy_pct: number }
+}
+
+export interface ExamPaper {
+  id: string
+  teacher_id: string
+  title: string
+  questions: ExamQuestion[]
+  source_meta: ExamSourceMeta
+  created_at: string
+}
+
 export type UserRole = 'admin' | 'educator_parent' | 'student'
 export type AccountStatus = 'pending' | 'approved' | 'rejected'
 export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'failed'
