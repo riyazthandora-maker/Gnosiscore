@@ -7,6 +7,7 @@ import { Step1ContentPicker } from "@/components/exams/step1-content-picker"
 import { Step2Weightage } from "@/components/exams/step2-weightage"
 import { Step3Settings } from "@/components/exams/step3-settings"
 import { Step4Editor } from "@/components/exams/step4-editor"
+import { Step5Preview } from "@/components/exams/step5-preview"
 
 const STEPS = [
   { label: "Content" },
@@ -86,7 +87,10 @@ function StepPlaceholder({ name }: { name: string }) {
 function WizardShell() {
   const { step } = useWizard()
   return (
-    <div className="flex flex-col gap-6 p-4 md:p-6 pb-24 md:pb-6 max-w-3xl mx-auto w-full">
+    <div className={cn(
+      "flex flex-col gap-6 p-4 md:p-6 pb-24 md:pb-6 mx-auto w-full transition-all",
+      step === 5 ? "max-w-4xl" : "max-w-3xl"
+    )}>
       <div>
         <h1 className="text-xl font-semibold mb-4">New Exam</h1>
         <StepIndicator />
@@ -97,7 +101,7 @@ function WizardShell() {
         {step === 2 && <Step2Weightage />}
         {step === 3 && <Step3Settings />}
         {step === 4 && <Step4Editor />}
-        {step === 5 && <StepPlaceholder name="Print Preview" />}
+        {step === 5 && <Step5Preview />}
         {step === 6 && <StepPlaceholder name="Name & Save" />}
       </div>
     </div>
