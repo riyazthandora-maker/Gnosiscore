@@ -8,6 +8,7 @@ import { Step2Weightage } from "@/components/exams/step2-weightage"
 import { Step3Settings } from "@/components/exams/step3-settings"
 import { Step4Editor } from "@/components/exams/step4-editor"
 import { Step5Preview } from "@/components/exams/step5-preview"
+import { Step6Save } from "@/components/exams/step6-save"
 
 const STEPS = [
   { label: "Content" },
@@ -102,7 +103,7 @@ function WizardShell() {
         {step === 3 && <Step3Settings />}
         {step === 4 && <Step4Editor />}
         {step === 5 && <Step5Preview />}
-        {step === 6 && <StepPlaceholder name="Name & Save" />}
+        {step === 6 && <Step6Save />}
       </div>
     </div>
   )
