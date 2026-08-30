@@ -10,7 +10,7 @@ import type { ExamQuestion } from "@/types"
 type GenerateStatus = "idle" | "loading" | "error"
 
 export function Step4Editor() {
-  const { books, selectedNodeIds, weightages, settings, questions, setQuestions, goNext, goBack } = useWizard()
+  const { books, selectedNodeIds, weightages, settings, questions, setQuestions, generalInstruction, goNext, goBack } = useWizard()
 
   const [status, setStatus] = useState<GenerateStatus>(questions.length > 0 ? "idle" : "loading")
   const [errorMsg, setErrorMsg] = useState("")
@@ -28,6 +28,7 @@ export function Step4Editor() {
           selectedNodeIds: Array.from(selectedNodeIds),
           weightages,
           settings,
+          general_instruction: generalInstruction || undefined,
         }),
       })
       const data = await res.json()

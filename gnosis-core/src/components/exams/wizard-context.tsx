@@ -32,6 +32,9 @@ interface WizardContextValue {
 
   title: string
   setTitle: (t: string) => void
+
+  generalInstruction: string
+  setGeneralInstruction: (s: string) => void
 }
 
 const WizardContext = createContext<WizardContextValue | null>(null)
@@ -44,6 +47,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState({ total: 10, easy_pct: 90 })
   const [questions, setQuestions] = useState<ExamQuestion[]>([])
   const [title, setTitle] = useState("")
+  const [generalInstruction, setGeneralInstruction] = useState("")
 
   const goNext = useCallback(() => setStep((s) => Math.min(s + 1, 6)), [])
   const goBack = useCallback(() => setStep((s) => Math.max(s - 1, 1)), [])
@@ -57,6 +61,7 @@ export function WizardProvider({ children }: { children: ReactNode }) {
       settings, setSettings,
       questions, setQuestions,
       title, setTitle,
+      generalInstruction, setGeneralInstruction,
     }}>
       {children}
     </WizardContext.Provider>

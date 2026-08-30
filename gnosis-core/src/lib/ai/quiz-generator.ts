@@ -33,6 +33,7 @@ export interface GenerateFromPromptOptions {
   prompt: string
   difficulty: Difficulty
   questionCount: number
+  generalInstruction?: string
 }
 
 export interface GenerateResult {
@@ -375,7 +376,11 @@ export async function generateBlended(opts: GenerateBlendedOptions): Promise<Gen
 export { toughnessToDifficulty }
 
 export async function generateQuestionsFromPrompt(opts: GenerateFromPromptOptions): Promise<GenerateResult> {
-  const { prompt, difficulty, questionCount } = opts
+  const { prompt, difficulty, questionCount, generalInstruction } = opts
+
+  const styleDirective = generalInstruction?.trim()
+    ? `\n- Style Directive: Ensure the nature, cognitive depth, and format of these questions strictly align with the following instruction: [${generalInstruction.trim()}].`
+    : ""
 
   const result = await withRetry(() =>
     callGemini({
@@ -405,7 +410,7 @@ Rules:
 - Explanations: 1-2 sentences, educational
 - topic: short noun phrase identifying the concept tested
 - For any mathematical expressions, fractions, integrals, or equations use LaTeX notation: wrap inline math in $...$ (e.g. $x^2 + 1$) and display/block math in $$...$$ (e.g. $$\\\\int_0^1 f(x)\\\\,dx$$). IMPORTANT: because this is JSON, every LaTeX backslash must be doubled — write \\\\leq not \\leq, \\\\frac not \\frac, \\\\geq not \\geq
-- CRITICAL JSON RULE: Every string value must be on a single line. Do NOT embed literal newline, tab, carriage-return, or any other control character (ASCII 0-31) inside any JSON string. Use a space instead of a line break within string values.`,
+- CRITICAL JSON RULE: Every string value must be on a single line. Do NOT embed literal newline, tab, carriage-return, or any other control character (ASCII 0-31) inside any JSON string. Use a space instead of a line break within string values.${styleDirective}`,
       contents: `Generate exactly ${questionCount} ${difficulty}-level multiple-choice questions about:\n\n${prompt}`,
       maxOutputTokens: Math.min(questionCount * 600, 8000),
       temperature: 0.7,

@@ -247,7 +247,7 @@ function BookRow({
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function Step1ContentPicker() {
-  const { books, setBooks, selectedNodeIds, setSelectedNodeIds, goNext } = useWizard()
+  const { books, setBooks, selectedNodeIds, setSelectedNodeIds, generalInstruction, setGeneralInstruction, goNext } = useWizard()
   const [loading, setLoading] = useState(!books.length)
   const [error, setError] = useState("")
   const [search, setSearch] = useState("")
@@ -399,6 +399,21 @@ export function Step1ContentPicker() {
             />
           ))
         )}
+      </div>
+
+      {/* General Instructions */}
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="general-instruction" className="text-sm font-medium">
+          General Instructions <span className="text-muted-foreground font-normal">(Optional)</span>
+        </label>
+        <textarea
+          id="general-instruction"
+          value={generalInstruction}
+          onChange={(e) => setGeneralInstruction(e.target.value)}
+          placeholder="e.g., JEE past papers, NEET style, Application level questions..."
+          rows={3}
+          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/50 focus:border-ring transition-colors resize-none"
+        />
       </div>
 
       {/* Footer */}

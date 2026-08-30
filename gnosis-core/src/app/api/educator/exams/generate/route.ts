@@ -15,6 +15,7 @@ interface GenerateRequest {
   selectedNodeIds: string[]
   weightages: Record<string, number>
   settings: { total: number; easy_pct: number }
+  general_instruction?: string
 }
 
 export async function POST(request: Request) {
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
-  const { books, selectedNodeIds, weightages, settings } = body
+  const { books, selectedNodeIds, weightages, settings, general_instruction } = body
   const { total, easy_pct } = settings
 
   const selectedSet = new Set(selectedNodeIds)
@@ -51,6 +52,7 @@ export async function POST(request: Request) {
         prompt: slice.text,
         difficulty: t.difficulty,
         questionCount: t.count,
+        generalInstruction: general_instruction,
       }).then(r => r.questions.map(q => ({ ...q, difficulty: t.difficulty, topic: q.topic || slice.label })))
     })
   )
