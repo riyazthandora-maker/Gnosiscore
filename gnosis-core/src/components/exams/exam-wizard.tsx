@@ -4,6 +4,8 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { WizardProvider, useWizard } from "@/components/exams/wizard-context"
 import { Step1ContentPicker } from "@/components/exams/step1-content-picker"
+import { Step2Weightage } from "@/components/exams/step2-weightage"
+import { Step3Settings } from "@/components/exams/step3-settings"
 
 const STEPS = [
   { label: "Content" },
@@ -91,8 +93,8 @@ function WizardShell() {
 
       <div>
         {step === 1 && <Step1ContentPicker />}
-        {step === 2 && <StepPlaceholder name="Weightage Distribution" />}
-        {step === 3 && <StepPlaceholder name="Exam Settings" />}
+        {step === 2 && <Step2Weightage />}
+        {step === 3 && <Step3Settings />}
         {step === 4 && <StepPlaceholder name="Review & Edit" />}
         {step === 5 && <StepPlaceholder name="Print Preview" />}
         {step === 6 && <StepPlaceholder name="Name & Save" />}
