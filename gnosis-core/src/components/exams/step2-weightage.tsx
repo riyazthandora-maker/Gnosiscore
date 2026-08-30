@@ -5,48 +5,7 @@ import { RotateCcw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useWizard } from "@/components/exams/wizard-context"
-import type { FlatBlock } from "@/types/book"
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-interface SelectedNode {
-  id: string
-  label: string
-  chapterLabel?: string
-  bookTitle: string
-}
-
-function deriveSelectedNodes(
-  books: Array<{ id: string; title: string; blocks: FlatBlock[] }>,
-  selectedNodeIds: Set<string>
-): SelectedNode[] {
-  const nodes: SelectedNode[] = []
-  for (const book of books) {
-    const chapters: Array<{ id: string; text: string; sections: Array<{ id: string; text: string }> }> = []
-    let cur: (typeof chapters)[0] | null = null
-    for (const b of book.blocks) {
-      if (b.level === "chapter") { cur = { id: b.id, text: b.text, sections: [] }; chapters.push(cur) }
-      else if (b.level === "section" && cur) cur.sections.push({ id: b.id, text: b.text })
-    }
-    for (const ch of chapters) {
-      if (ch.sections.length === 0) {
-        if (selectedNodeIds.has(ch.id)) nodes.push({ id: ch.id, label: ch.text, bookTitle: book.title })
-      } else {
-        for (const s of ch.sections) {
-          if (selectedNodeIds.has(s.id)) nodes.push({ id: s.id, label: s.text, chapterLabel: ch.text, bookTitle: book.title })
-        }
-      }
-    }
-  }
-  return nodes
-}
-
-function equalWeights(nodes: SelectedNode[]): Record<string, number> {
-  if (nodes.length === 0) return {}
-  const base = Math.floor(100 / nodes.length)
-  const remainder = 100 - base * nodes.length
-  return Object.fromEntries(nodes.map((n, i) => [n.id, i === nodes.length - 1 ? base + remainder : base]))
-}
+import { deriveSelectedNodes, equalWeights, type SelectedNode } from "@/lib/exam/utils"
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
