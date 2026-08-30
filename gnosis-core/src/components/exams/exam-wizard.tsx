@@ -6,6 +6,7 @@ import { WizardProvider, useWizard } from "@/components/exams/wizard-context"
 import { Step1ContentPicker } from "@/components/exams/step1-content-picker"
 import { Step2Weightage } from "@/components/exams/step2-weightage"
 import { Step3Settings } from "@/components/exams/step3-settings"
+import { Step4Editor } from "@/components/exams/step4-editor"
 
 const STEPS = [
   { label: "Content" },
@@ -95,7 +96,7 @@ function WizardShell() {
         {step === 1 && <Step1ContentPicker />}
         {step === 2 && <Step2Weightage />}
         {step === 3 && <Step3Settings />}
-        {step === 4 && <StepPlaceholder name="Review & Edit" />}
+        {step === 4 && <Step4Editor />}
         {step === 5 && <StepPlaceholder name="Print Preview" />}
         {step === 6 && <StepPlaceholder name="Name & Save" />}
       </div>
