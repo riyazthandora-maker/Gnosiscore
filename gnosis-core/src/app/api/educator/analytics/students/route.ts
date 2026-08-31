@@ -43,27 +43,18 @@ export async function GET() {
     return NextResponse.json({ students })
   }
 
-  const [assignmentsRes, attemptsRes] = await Promise.all([
-    supabase
-      .from("test_assignments")
-      .select("student_id, test_id")
-      .in("student_id", studentIds)
-      .in("test_id", testIds),
-    supabase
-      .from("test_attempts")
-      .select("student_id, test_id, score, max_score, completed_at")
-      .in("student_id", studentIds)
-      .in("test_id", testIds)
-      .not("completed_at", "is", null),
-  ])
+  const { data: attemptsData } = await supabase
+    .from("test_attempts")
+    .select("student_id, test_id, score, max_score, completed_at")
+    .in("student_id", studentIds)
+    .in("test_id", testIds)
+    .not("completed_at", "is", null)
 
-  const assignments = assignmentsRes.data ?? []
-  const attempts = attemptsRes.data ?? []
+  const attempts = attemptsData ?? []
 
   const students = profiles.map((profile) => {
     const sid = profile.id
 
-    const studentAssignments = assignments.filter((a) => a.student_id === sid)
     const studentAttempts = attempts.filter((a) => a.student_id === sid)
 
     const scores = studentAttempts
@@ -81,7 +72,7 @@ export async function GET() {
       id: sid,
       full_name: profile.full_name,
       email: profile.email,
-      assigned: studentAssignments.length,
+      assigned: 0,
       completed: studentAttempts.length,
       avg_score: avgScore,
       last_attempt_at: lastAttempt?.completed_at ?? null,

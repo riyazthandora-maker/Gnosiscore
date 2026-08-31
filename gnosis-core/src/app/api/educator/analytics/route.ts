@@ -6,13 +6,9 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const [testsRes, studentsRes, assignmentsRes, attemptsRes, bankRes] = await Promise.all([
+  const [testsRes, studentsRes, attemptsRes, bankRes] = await Promise.all([
     supabase.from("tests").select("id, is_published").eq("creator_id", user.id),
     supabase.from("educator_students").select("student_id", { count: "exact", head: true }).eq("educator_id", user.id),
-    supabase
-      .from("test_assignments")
-      .select("test_id, tests!inner(creator_id)")
-      .eq("tests.creator_id", user.id),
     supabase
       .from("test_attempts")
       .select("test_id, score, max_score, tests!inner(creator_id)")
@@ -34,7 +30,7 @@ export async function GET() {
     students: studentsRes.count ?? 0,
     tests: tests.length,
     published_tests: tests.filter((t) => t.is_published).length,
-    total_assignments: assignmentsRes.data?.length ?? 0,
+    total_assignments: 0,
     total_completions: attempts.length,
     avg_score_pct: avgScore,
     approved_questions: bankRes.count ?? 0,

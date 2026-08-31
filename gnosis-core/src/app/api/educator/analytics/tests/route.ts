@@ -16,20 +16,15 @@ export async function GET() {
 
   const testIds = tests.map((t) => t.id)
 
-  const [assignmentsRes, attemptsRes] = await Promise.all([
-    supabase.from("test_assignments").select("test_id").in("test_id", testIds),
-    supabase
-      .from("test_attempts")
-      .select("test_id, score, max_score")
-      .in("test_id", testIds)
-      .not("completed_at", "is", null),
-  ])
+  const { data: attemptsData } = await supabase
+    .from("test_attempts")
+    .select("test_id, score, max_score")
+    .in("test_id", testIds)
+    .not("completed_at", "is", null)
 
-  const assignments = assignmentsRes.data ?? []
-  const attempts = attemptsRes.data ?? []
+  const attempts = attemptsData ?? []
 
   const result = tests.map((test) => {
-    const testAssignments = assignments.filter((a) => a.test_id === test.id)
     const testAttempts = attempts.filter((a) => a.test_id === test.id)
 
     const scores = testAttempts
@@ -50,7 +45,7 @@ export async function GET() {
       is_published: test.is_published,
       question_count: (test.question_ids as string[]).length,
       created_at: test.created_at,
-      assigned: testAssignments.length,
+      assigned: 0,
       completed: testAttempts.length,
       avg_score: avgScore,
       pass_rate: passRate,
