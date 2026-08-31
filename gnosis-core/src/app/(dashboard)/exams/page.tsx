@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+import { Plus, Send } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { ExamList } from "@/components/exams/exam-list"
 
@@ -32,13 +32,22 @@ export default async function ExamsPage() {
             {exams.length === 0 ? "No exams yet." : `${exams.length} saved exam${exams.length !== 1 ? "s" : ""}`}
           </p>
         </div>
-        <Link
-          href="/exams/new"
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
-        >
-          <Plus className="size-4" />
-          New Exam
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/exams/assign"
+            className="inline-flex items-center gap-2 rounded-lg border border-primary/40 px-4 py-2 text-sm font-medium text-primary hover:bg-primary/5 transition-colors"
+          >
+            <Send className="size-4" />
+            Assign
+          </Link>
+          <Link
+            href="/exams/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="size-4" />
+            New Exam
+          </Link>
+        </div>
       </div>
 
       <ExamList exams={exams} />

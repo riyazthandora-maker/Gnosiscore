@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { FileText, Search } from "lucide-react"
+import { FileText, Search, Send } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface ExamSummary {
@@ -59,22 +59,28 @@ export function ExamList({ exams }: { exams: ExamSummary[] }) {
       {filtered.length > 0 && (
         <div className="flex flex-col gap-2">
           {filtered.map(e => (
-            <Link
+            <div
               key={e.id}
-              href={`/exams/${e.id}`}
-              className={cn(
-                "flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-5 py-4",
-                "hover:bg-accent transition-colors"
-              )}
+              className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
             >
-              <div className="min-w-0">
+              <Link
+                href={`/exams/${e.id}`}
+                className={cn("flex-1 min-w-0 hover:opacity-80 transition-opacity")}
+              >
                 <p className="font-medium text-sm truncate">{e.title}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">{formatDate(e.created_at)}</p>
-              </div>
+              </Link>
               <div className="shrink-0 text-xs text-muted-foreground">
                 {e.question_count} question{e.question_count !== 1 ? "s" : ""}
               </div>
-            </Link>
+              <Link
+                href={`/exams/assign?exam_id=${e.id}`}
+                className="shrink-0 inline-flex items-center gap-1.5 rounded-lg border border-primary/40 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/5 transition-colors"
+              >
+                <Send className="size-3" />
+                Assign
+              </Link>
+            </div>
           ))}
         </div>
       )}

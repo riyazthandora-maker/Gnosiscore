@@ -231,6 +231,60 @@ export interface RosterEntry {
   updated_at: string
 }
 
+// ── ASSIGN TEST MODULE ───────────────────────────────────────────────────────
+
+export interface ExamAssignment {
+  id: string
+  paper_id: string
+  student_roster_id: string
+  assigned_by: string
+  assigned_at: string
+  duration_minutes: number
+  starts_at: string | null
+  ends_at: string | null
+  max_attempts: number
+  randomize_questions: boolean
+  shuffle_answers: boolean
+  allow_backtrack: boolean
+  mandatory_answering: boolean
+  flag_for_review: boolean
+  browser_lockdown: boolean
+  disable_copy_paste: boolean
+  tab_switch_warnings: boolean
+  tab_switch_limit: number
+  release_results_immediately: boolean
+  show_explanations: boolean
+  threshold_excellent: number
+  threshold_distinction: number
+  threshold_pass: number
+}
+
+export type SessionStatus = 'lobby' | 'in_progress' | 'paused' | 'submitted' | 'auto_submitted'
+
+export interface ExamSession {
+  id: string
+  assignment_id: string
+  student_user_id: string
+  status: SessionStatus
+  attempt_number: number
+  started_at: string | null
+  paused_at: string | null
+  elapsed_seconds: number
+  answers: Record<string, string>
+  flagged_questions: string[]
+  tab_switch_count: number
+  score: number | null
+  max_score: number | null
+  completed_at: string | null
+  created_at: string
+}
+
+export interface AssignmentWithDetails extends ExamAssignment {
+  exam_paper: { id: string; title: string; question_count: number }
+  student: { id: string; name: string; email: string; grade_name: string | null }
+  sessions: ExamSession[]
+}
+
 export const FILE_LIMITS = {
   perFile: 4 * 1024 * 1024,        // 4 MB
   perTransaction: 20 * 1024 * 1024, // 20 MB
