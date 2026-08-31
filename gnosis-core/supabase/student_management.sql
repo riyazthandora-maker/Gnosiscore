@@ -40,6 +40,10 @@ ALTER TABLE public.student_roster ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "educators_manage_own_roster" ON public.student_roster
   FOR ALL USING (teacher_id = auth.uid());
 
+-- Students can read their own roster entry (needed for exam_assignments dashboard query)
+CREATE POLICY "students_read_own_roster" ON public.student_roster
+  FOR SELECT USING (student_user_id = auth.uid());
+
 -- Index for fast token lookups (used by public invite route via admin client)
 CREATE INDEX IF NOT EXISTS idx_student_roster_invite_token
   ON public.student_roster(invite_token)
