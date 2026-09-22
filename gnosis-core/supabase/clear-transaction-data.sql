@@ -3,14 +3,10 @@
 -- Run in: Supabase Dashboard → SQL Editor → Run
 --
 -- Deletes every row generated through app usage:
---   documents, document_chunks, generation_requests, questions,
---   tests, test_assignments, test_attempts, notifications,
---   books, book_collaborators, chapters
+--   generation_requests, questions, tests, test_assignments,
+--   test_attempts, notifications, books, book_collaborators, chapters
 -- plus legacy tables (responses, test_configs, test_invitations,
 --   diagnostic_reports, dashboard_shares) if they still exist.
---
--- NOTE: uploaded files in the "documents" storage bucket are NOT deleted
--- here — see section 2 for how to clear them (Storage API / dashboard UI).
 --
 -- KEEPS (account / reference data):
 --   users, platform_settings, educator_students
@@ -39,8 +35,6 @@ BEGIN
     'tests',
     'questions',
     'generation_requests',
-    'document_chunks',
-    'documents',
     'dashboard_shares',          -- legacy
     'diagnostic_reports',        -- legacy
     'notifications',
@@ -58,15 +52,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- ── 2. Actual uploaded files in storage ──────────────────────
--- NOT handled here. Supabase rejects direct SQL writes to storage.objects
--- ("Use the Storage API instead") and the SQL editor role can't disable
--- the guard triggers ("must be owner of table objects"). Clear the bucket
--- with either:
---   • Dashboard → Storage → documents → select all → Delete, or
---   • node supabase/clear-storage.mjs   (Storage API + service role key)
-
--- ── 3. Reset per-user token consumption counters ─────────────
+-- ── 2. Reset per-user token consumption counters ─────────────
 -- Part of the transactional accounting — comment out if unwanted.
 UPDATE public.users SET tokens_used = 0;
 

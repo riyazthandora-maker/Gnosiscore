@@ -18,6 +18,7 @@ export function CreatableGradeSelect({ grades, value, valueName, onChange, onCre
   const [open, setOpen] = useState(false)
   const [inputValue, setInputValue] = useState("")
   const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState("")
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -39,6 +40,7 @@ export function CreatableGradeSelect({ grades, value, valueName, onChange, onCre
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false)
         setInputValue("")
+        setCreateError("")
       }
     }
     document.addEventListener("mousedown", onOutside)
@@ -67,13 +69,14 @@ export function CreatableGradeSelect({ grades, value, valueName, onChange, onCre
     const name = inputValue.trim()
     if (!name || creating) return
     setCreating(true)
+    setCreateError("")
     try {
       const newGrade = await onCreateGrade(name)
       onChange(newGrade.id, newGrade.name)
       setOpen(false)
       setInputValue("")
-    } catch {
-      // error handled by parent
+    } catch (err: unknown) {
+      setCreateError((err as Error)?.message ?? "Failed to create grade.")
     } finally {
       setCreating(false)
     }
@@ -163,6 +166,9 @@ export function CreatableGradeSelect({ grades, value, valueName, onChange, onCre
               <li className="px-3 py-3 text-center text-sm text-muted-foreground">
                 No grades yet. Type to create one.
               </li>
+            )}
+            {createError && (
+              <li className="px-3 py-2 text-xs text-destructive">{createError}</li>
             )}
           </ul>
         </div>

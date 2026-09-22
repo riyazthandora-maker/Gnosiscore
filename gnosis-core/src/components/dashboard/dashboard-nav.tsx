@@ -3,16 +3,22 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { BarChart3, FileText, GraduationCap, LayoutDashboard, LogOut, Menu, NotebookPen, Settings, X } from "lucide-react"
+import { BarChart3, CalendarDays, FileText, GraduationCap, LayoutDashboard, LogOut, Menu, NotebookPen, Settings, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { ThemeToggle } from "@/components/shared/theme-toggle"
 import { createClient } from "@/lib/supabase/client"
 
+function isActive(pathname: string, href: string) {
+  if (href === "/exams") return pathname === "/exams" || (pathname.startsWith("/exams/") && !pathname.startsWith("/exams/pacing"))
+  return pathname === href || pathname.startsWith(href + "/")
+}
+
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/books", label: "Books", icon: NotebookPen },
   { href: "/exams", label: "Exams", icon: FileText },
+  { href: "/exams/pacing", label: "Pacing", icon: CalendarDays },
   { href: "/students", label: "Students", icon: GraduationCap },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
@@ -38,7 +44,7 @@ export function DashboardNav() {
         onClick={onClick}
         className={cn(
           "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-          pathname === href || pathname.startsWith(href + "/")
+          isActive(pathname, href)
             ? "bg-sidebar-accent text-sidebar-accent-foreground"
             : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
         )}

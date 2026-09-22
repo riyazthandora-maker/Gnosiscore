@@ -23,12 +23,6 @@ CREATE POLICY "chapters_admin" ON public.chapters
 
 CREATE INDEX IF NOT EXISTS idx_chapters_user ON public.chapters(user_id);
 
--- ── DOCUMENTS: add chapter_id column ──────────────────────────
-ALTER TABLE IF EXISTS public.documents
-  ADD COLUMN IF NOT EXISTS chapter_id UUID REFERENCES public.chapters(id) ON DELETE CASCADE;
-
-CREATE INDEX IF NOT EXISTS idx_documents_chapter ON public.documents(chapter_id) WHERE chapter_id IS NOT NULL;
-
 -- ── PLATFORM_SETTINGS: new limit columns ──────────────────────
 ALTER TABLE IF EXISTS public.platform_settings
   ADD COLUMN IF NOT EXISTS max_storage_bytes    BIGINT NOT NULL DEFAULT 209715200,

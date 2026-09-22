@@ -31,7 +31,6 @@ export interface ExamPaper {
 
 export type UserRole = 'admin' | 'educator_parent' | 'student'
 export type AccountStatus = 'pending' | 'approved' | 'rejected'
-export type DocumentStatus = 'pending' | 'processing' | 'ready' | 'failed'
 export type GenerationStatus = 'pending_admin' | 'approved' | 'rejected' | 'completed'
 export type QuestionStatus = 'pending_review' | 'approved' | 'rejected'
 export type Difficulty = 'easy' | 'medium' | 'hard'
@@ -55,27 +54,6 @@ export interface EducatorStudent {
   linked_at: string
 }
 
-export interface Document {
-  id: string
-  owner_id: string
-  file_name: string
-  storage_path: string
-  markdown_path: string | null
-  processing_status: DocumentStatus
-  chunk_count: number | null
-  total_bytes: number
-  created_at: string
-}
-
-export interface DocumentChunk {
-  id: string
-  document_id: string
-  chunk_index: number
-  content: string
-  token_count: number | null
-  created_at: string
-}
-
 export interface QuestionOption {
   label: 'A' | 'B' | 'C' | 'D'
   text: string
@@ -86,8 +64,6 @@ export interface Question {
   id: string
   owner_id: string
   generation_request_id: string | null
-  document_id: string | null
-  chunk_ids: string[]
   question_text: string
   options: QuestionOption[]
   explanation: string | null
@@ -180,7 +156,6 @@ export interface TopicWeakness {
 export interface DiagnosticReport {
   id: string
   user_id: string
-  document_id: string | null
   generated_at: string
   strengths: TopicStrength[] | null
   weaknesses: TopicWeakness[] | null
@@ -285,13 +260,38 @@ export interface AssignmentWithDetails extends ExamAssignment {
   sessions: ExamSession[]
 }
 
-export const FILE_LIMITS = {
-  perFile: 4 * 1024 * 1024,        // 4 MB
-  perTransaction: 20 * 1024 * 1024, // 20 MB
-} as const
-
 export const GENERATION_ADMIN_THRESHOLD = 20
-export const RAG_SIMILARITY_THRESHOLD = 0.50
+
+// ── SCHEDULING ENGINE (Phase 2) ──────────────────────────────
+
+export type MilestoneType  = 'teach' | 'revise' | 'assess'
+export type AutoExamStatus = 'pending_review' | 'approved' | 'assigned'
+
+export interface DifficultyBands {
+  low:    [number, number]
+  medium: [number, number]
+  high:   [number, number]
+}
+
+export interface PacingEvent {
+  id:           string
+  plan_id:      string
+  event_type:   string
+  payload:      Record<string, unknown>
+  triggered_by: string
+  created_at:   string
+}
+
+export interface PacingSuggestion {
+  id:              string
+  plan_id:         string
+  suggestion_type: 'reschedule' | 'insert_revise'
+  status:          'pending' | 'applied' | 'dismissed'
+  payload:         Record<string, unknown>
+  ai_reasoning:    string | null
+  created_at:      string
+  acted_at:        string | null
+}
 
 export function roleHomePath(role: UserRole): string {
   switch (role) {

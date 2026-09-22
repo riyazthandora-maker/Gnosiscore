@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { motion, AnimatePresence } from "framer-motion"
-import { CheckCircle2, XCircle, Clock, UserCheck, Loader2, Pencil, X, Power, HardDrive } from "lucide-react"
+import { CheckCircle2, XCircle, Clock, UserCheck, Loader2, Pencil, X, Power, HardDrive, KeyRound } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -330,6 +330,107 @@ function QuestionThresholdEditor({ userId }: { userId: string }) {
   )
 }
 
+function ResetPasswordModal({ userId }: { userId: string }) {
+  const [open, setOpen] = useState(false)
+  const [password, setPassword] = useState("")
+  const [confirm, setConfirm] = useState("")
+  const [error, setError] = useState("")
+  const [success, setSuccess] = useState(false)
+
+  const { mutate, isPending } = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/admin/users/${userId}/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      })
+      if (!res.ok) { const { error } = await res.json(); throw new Error(error) }
+      return res.json()
+    },
+    onSuccess: () => { setSuccess(true); setPassword(""); setConfirm("") },
+    onError: (err: Error) => setError(err.message),
+  })
+
+  function handleOpen() { setOpen(true); setPassword(""); setConfirm(""); setError(""); setSuccess(false) }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    setError("")
+    if (password.length < 8) { setError("Password must be at least 8 characters."); return }
+    if (password !== confirm) { setError("Passwords do not match."); return }
+    mutate()
+  }
+
+  return (
+    <>
+      <button
+        onClick={handleOpen}
+        title="Reset teacher password"
+        className="flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
+      >
+        <KeyRound className="size-3" />
+        Reset Password
+      </button>
+
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-card p-6 shadow-xl space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Reset Teacher Password</h3>
+              <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
+                <X className="size-4" />
+              </button>
+            </div>
+
+            {success ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="size-4" />
+                  Password has been reset successfully.
+                </div>
+                <Button className="w-full" onClick={() => setOpen(false)}>Done</Button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">New Password</label>
+                  <input
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Min. 8 characters"
+                    required
+                    autoFocus
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Confirm Password</label>
+                  <input
+                    type="password"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    placeholder="Repeat new password"
+                    required
+                    className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+                  />
+                </div>
+                {error && <p className="text-xs text-destructive">{error}</p>}
+                <div className="flex gap-2 pt-1">
+                  <Button type="submit" className="flex-1" disabled={isPending}>
+                    {isPending ? <Loader2 className="size-4 animate-spin" /> : "Reset Password"}
+                  </Button>
+                  <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 function ApproveRejectButtons({ userId, currentStatus, onDone }: {
   userId: string
   currentStatus: AccountStatus
@@ -535,7 +636,10 @@ export default function RegistrationsPage() {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {u.account_status === "approved" && (
-                      <ActiveToggle userId={u.id} isActive={u.is_active} />
+                      <>
+                        <ActiveToggle userId={u.id} isActive={u.is_active} />
+                        <ResetPasswordModal userId={u.id} />
+                      </>
                     )}
                     <ApproveRejectButtons
                       userId={u.id}

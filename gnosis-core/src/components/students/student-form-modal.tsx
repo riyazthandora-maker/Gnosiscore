@@ -41,6 +41,10 @@ export function StudentFormModal({ onClose, onSave, onCreateGrade, grades, entry
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
+    if (!gradeId) {
+      setError("Please select or create a grade.")
+      return
+    }
     setSaving(true)
     try {
       await onSave({ name: name.trim(), email: email.trim(), phone: phone.trim(), grade_id: gradeId, grade_name: gradeName })
@@ -116,7 +120,7 @@ export function StudentFormModal({ onClose, onSave, onCreateGrade, grades, entry
           </div>
 
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Grade <span className="text-muted-foreground text-xs font-normal">(optional)</span></label>
+            <label className="mb-1.5 block text-sm font-medium">Grade <span className="text-destructive">*</span></label>
             <CreatableGradeSelect
               grades={grades}
               value={gradeId}

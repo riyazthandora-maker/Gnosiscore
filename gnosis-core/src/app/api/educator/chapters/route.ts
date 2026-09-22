@@ -8,13 +8,12 @@ async function getEducator(supabase: Awaited<ReturnType<typeof createClient>>) {
   if (!user) return null
   const { data: profile } = await supabase
     .from("users")
-    .select("role, account_status, is_active")
+    .select("role, account_status")
     .eq("id", user.id)
     .single()
   if (
     profile?.role !== "educator_parent" ||
-    profile.account_status !== "approved" ||
-    profile.is_active === false
+    profile.account_status !== "approved"
   ) return null
   return user
 }

@@ -73,7 +73,7 @@ export default async function DashboardPage() {
         <div className="grid gap-3 sm:grid-cols-3">
           {[
             { href: "/assignments", icon: ClipboardList, label: "Assign test", desc: "Send tests to students" },
-            { href: "/tests/generate", icon: Plus, label: "Generate questions", desc: "AI from your documents" },
+            { href: "/tests/generate", icon: Plus, label: "Generate questions", desc: "AI-powered from your books" },
             { href: "/analytics", icon: BarChart3, label: "View analytics", desc: "Test and student results" },
           ].map(({ href, icon: Icon, label, desc }) => (
             <Link
@@ -161,8 +161,8 @@ export default async function DashboardPage() {
             Upload a document, generate questions, review them, then build your first test.
           </p>
           <div className="flex justify-center gap-3 pt-1">
-            <Link href="/documents" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
-              Upload document
+            <Link href="/exams/new" className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors">
+              Create test
             </Link>
           </div>
         </div>

@@ -32,10 +32,12 @@ CREATE TABLE IF NOT EXISTS public.users (
   approved_at    TIMESTAMPTZ,
   token_cap      INTEGER,
   tokens_used    INTEGER NOT NULL DEFAULT 0,
+  is_active      BOOLEAN NOT NULL DEFAULT true,
   created_at     TIMESTAMPTZ DEFAULT NOW()
 );
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS token_cap   INTEGER;
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS tokens_used INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS is_active   BOOLEAN NOT NULL DEFAULT true;
 
 -- Auto-create profile row; educator_parent accounts start as pending
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -81,33 +83,54 @@ CREATE TABLE IF NOT EXISTS public.educator_students (
   UNIQUE(educator_id, student_id)
 );
 
--- ── DOCUMENTS ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS public.documents (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  owner_id          UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  file_name         TEXT NOT NULL,
-  storage_path      TEXT NOT NULL,
-  markdown_path     TEXT,
-  processing_status TEXT NOT NULL DEFAULT 'pending'
-    CHECK (processing_status IN ('pending','processing','ready','failed')),
-  chunk_count       INT,
-  total_bytes       BIGINT NOT NULL,
-  created_at        TIMESTAMPTZ DEFAULT NOW()
+-- ── STUDENT GRADES ───────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.student_grades (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  name       TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(teacher_id, name)
 );
 
--- ── DOCUMENT CHUNKS (RAG) ─────────────────────────────────────
-CREATE TABLE IF NOT EXISTS public.document_chunks (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  document_id UUID NOT NULL REFERENCES public.documents(id) ON DELETE CASCADE,
-  chunk_index INT NOT NULL,
-  content     TEXT NOT NULL,
-  embedding   vector(768),
-  token_count INT,
-  created_at  TIMESTAMPTZ DEFAULT NOW()
+ALTER TABLE public.student_grades ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "educators_manage_own_grades" ON public.student_grades;
+CREATE POLICY "educators_manage_own_grades" ON public.student_grades
+  FOR ALL USING (teacher_id = auth.uid());
+
+-- ── STUDENT ROSTER ────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.student_roster (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  teacher_id        UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  student_user_id   UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  name              TEXT NOT NULL,
+  email             TEXT NOT NULL,
+  phone             TEXT,
+  grade_id          UUID REFERENCES public.student_grades(id) ON DELETE SET NULL,
+  status            TEXT NOT NULL DEFAULT 'invited'
+                      CHECK (status IN ('invited', 'active', 'archived')),
+  invite_token      TEXT UNIQUE,
+  invite_expires_at TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ DEFAULT NOW(),
+  updated_at        TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(teacher_id, email)
 );
--- IVFFlat index — run VACUUM ANALYZE after bulk inserts
-CREATE INDEX IF NOT EXISTS idx_chunks_embedding
-  ON public.document_chunks USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+ALTER TABLE public.student_roster ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "educators_manage_own_roster" ON public.student_roster;
+DROP POLICY IF EXISTS "students_read_own_roster"    ON public.student_roster;
+CREATE POLICY "educators_manage_own_roster" ON public.student_roster
+  FOR ALL USING (teacher_id = auth.uid());
+CREATE POLICY "students_read_own_roster" ON public.student_roster
+  FOR SELECT USING (student_user_id = auth.uid());
+
+CREATE INDEX IF NOT EXISTS idx_student_roster_invite_token
+  ON public.student_roster(invite_token)
+  WHERE invite_token IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS idx_student_roster_email
+  ON public.student_roster(email);
 
 -- ── GENERATION REQUESTS (>20 question admin gate) ────────────
 CREATE TABLE IF NOT EXISTS public.generation_requests (
@@ -140,8 +163,6 @@ CREATE TABLE IF NOT EXISTS public.questions (
   id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   owner_id              UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   generation_request_id UUID REFERENCES public.generation_requests(id),
-  document_id           UUID REFERENCES public.documents(id),
-  chunk_ids             UUID[] DEFAULT '{}',
   question_text         TEXT NOT NULL,
   options               JSONB NOT NULL,
   explanation           TEXT,
@@ -199,8 +220,6 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 );
 
 -- ── INDEXES ───────────────────────────────────────────────────
-CREATE INDEX IF NOT EXISTS idx_chunks_document      ON public.document_chunks(document_id);
-CREATE INDEX IF NOT EXISTS idx_documents_owner      ON public.documents(owner_id);
 CREATE INDEX IF NOT EXISTS idx_questions_owner      ON public.questions(owner_id);
 CREATE INDEX IF NOT EXISTS idx_questions_status     ON public.questions(status);
 CREATE INDEX IF NOT EXISTS idx_tests_creator        ON public.tests(creator_id);
@@ -216,8 +235,6 @@ CREATE INDEX IF NOT EXISTS idx_edu_students_edu     ON public.educator_students(
 
 ALTER TABLE public.users               ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.educator_students   ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.documents           ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.document_chunks     ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.generation_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.questions           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tests               ENABLE ROW LEVEL SECURITY;
@@ -246,31 +263,6 @@ CREATE POLICY "edu_students_educator" ON public.educator_students
   FOR ALL    USING (auth.uid() = educator_id);
 CREATE POLICY "edu_students_student"  ON public.educator_students
   FOR SELECT USING (auth.uid() = student_id);
-
--- documents: owner full access; linked students read ready docs; admin reads all
-DROP POLICY IF EXISTS "documents_owner"          ON public.documents;
-DROP POLICY IF EXISTS "documents_linked_student" ON public.documents;
-DROP POLICY IF EXISTS "documents_admin"          ON public.documents;
-CREATE POLICY "documents_owner" ON public.documents
-  FOR ALL USING (auth.uid() = owner_id);
-CREATE POLICY "documents_linked_student" ON public.documents
-  FOR SELECT USING (
-    processing_status = 'ready' AND
-    EXISTS (
-      SELECT 1 FROM public.educator_students es
-      WHERE es.student_id = auth.uid() AND es.educator_id = owner_id
-    )
-  );
-CREATE POLICY "documents_admin" ON public.documents FOR SELECT USING (public.is_admin());
-
--- document_chunks: same as parent document
-DROP POLICY IF EXISTS "chunks_owner" ON public.document_chunks;
-DROP POLICY IF EXISTS "chunks_admin" ON public.document_chunks;
-CREATE POLICY "chunks_owner" ON public.document_chunks
-  FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.documents d WHERE d.id = document_id AND d.owner_id = auth.uid())
-  );
-CREATE POLICY "chunks_admin" ON public.document_chunks FOR SELECT USING (public.is_admin());
 
 -- generation_requests: requester owns; admin manages all
 DROP POLICY IF EXISTS "gen_req_owner" ON public.generation_requests;
@@ -345,25 +337,3 @@ DROP POLICY IF EXISTS "notifs_own" ON public.notifications;
 CREATE POLICY "notifs_own" ON public.notifications
   FOR ALL USING (auth.uid() = user_id);
 
--- ── VECTOR SEARCH RPC ─────────────────────────────────────────
--- Used by quiz-generator.ts for RAG chunk retrieval.
--- Requires pgvector extension (already enabled above).
-CREATE OR REPLACE FUNCTION match_chunks(
-  query_embedding   vector(768),
-  document_ids      uuid[],
-  similarity_threshold float DEFAULT 0.72,
-  match_count       int    DEFAULT 20
-)
-RETURNS TABLE(id uuid, document_id uuid, content text, similarity float)
-LANGUAGE sql STABLE SECURITY DEFINER AS $$
-  SELECT
-    dc.id,
-    dc.document_id,
-    dc.content,
-    (1 - (dc.embedding <=> query_embedding))::float AS similarity
-  FROM public.document_chunks dc
-  WHERE dc.document_id = ANY(document_ids)
-    AND 1 - (dc.embedding <=> query_embedding) > similarity_threshold
-  ORDER BY dc.embedding <=> query_embedding
-  LIMIT match_count;
-$$;

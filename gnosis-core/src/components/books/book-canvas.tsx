@@ -1,10 +1,10 @@
 "use client"
 
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import {
-  ChevronLeft, GripVertical, Loader2, Paperclip, Plus, Share2,
-  Sparkles, Trash2, UserPlus, X,
+  ChevronDown, ChevronLeft, ChevronRight, GripVertical, Loader2,
+  Paperclip, Plus, Share2, Sparkles, Trash2, UserPlus, X,
 } from "lucide-react"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 import { cn } from "@/lib/utils"
@@ -76,6 +76,41 @@ function cascadeEnd(blocks: FlatBlock[], idx: number): number {
     return end
   }
   return idx + 1
+}
+
+function blockHasChildren(blocks: FlatBlock[], index: number): boolean {
+  const block = blocks[index]
+  if (block.level === "details") return false
+  const next = blocks[index + 1]
+  if (!next) return false
+  return block.level === "chapter" ? next.level !== "chapter" : next.level === "details"
+}
+
+function getVisibleBlocks(
+  blocks: FlatBlock[],
+  viewLevel: 1 | 2 | 3,
+  collapsedIds: Set<string>,
+): FlatBlock[] {
+  if (viewLevel === 1) return blocks.filter((b) => b.level === "chapter")
+  if (viewLevel === 2) return blocks.filter((b) => b.level !== "details")
+  const visible: FlatBlock[] = []
+  let chapterCollapsed = false
+  let sectionCollapsed = false
+  for (const block of blocks) {
+    if (block.level === "chapter") {
+      chapterCollapsed = collapsedIds.has(block.id)
+      sectionCollapsed = false
+      visible.push(block)
+    } else if (block.level === "section") {
+      if (chapterCollapsed) continue
+      sectionCollapsed = collapsedIds.has(block.id)
+      visible.push(block)
+    } else {
+      if (chapterCollapsed || sectionCollapsed) continue
+      visible.push(block)
+    }
+  }
+  return visible
 }
 
 const PER_FILE_MAX = 4 * 1024 * 1024
@@ -633,6 +668,9 @@ interface BlockRowProps {
   isDragging: boolean
   isReadOnly: boolean
   presenceColor: string | null
+  hasChildren: boolean
+  isCollapsed: boolean
+  onToggleCollapse: (id: string) => void
   onTextChange: (id: string, text: string) => void
   onKeyDown: (e: React.KeyboardEvent<HTMLElement>, id: string) => void
   onDragStart: (id: string) => void
@@ -652,6 +690,9 @@ function BlockRow({
   isDragging,
   isReadOnly,
   presenceColor,
+  hasChildren,
+  isCollapsed,
+  onToggleCollapse,
   onTextChange,
   onKeyDown,
   onDragStart,
@@ -694,6 +735,24 @@ function BlockRow({
           : undefined
         }
       >
+        {/* Collapse toggle */}
+        {!isDetails ? (
+          <button
+            onClick={() => hasChildren && onToggleCollapse(block.id)}
+            className={cn(
+              "shrink-0 p-0.5 text-muted-foreground/50 transition-colors",
+              hasChildren ? "hover:text-foreground cursor-pointer" : "opacity-0 cursor-default pointer-events-none",
+            )}
+          >
+            {isCollapsed
+              ? <ChevronRight className="size-3.5" />
+              : <ChevronDown className="size-3.5" />
+            }
+          </button>
+        ) : (
+          <span className="shrink-0 w-4" />
+        )}
+
         <span className={cn(
           "shrink-0 cursor-grab p-0.5 text-muted-foreground/40 hover:text-muted-foreground transition-opacity",
           isDetails && "mt-0.5",
@@ -785,6 +844,17 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
   const [importOpen, setImportOpen] = useState(false)
   const [presence, setPresence] = useState<PresenceEntry[]>([])
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null)
+
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+
+  function toggleCollapse(id: string) {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
 
   const inputRefs = useRef<Map<string, HTMLInputElement | HTMLTextAreaElement>>(new Map())
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -1075,6 +1145,30 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
   const isReadOnly = myRole === "viewer"
   const isOwner = myRole === "owner"
 
+  const blocksWithChildren = useMemo(() => {
+    if (!book) return new Set<string>()
+    const set = new Set<string>()
+    book.blocks.forEach((_, i) => {
+      if (blockHasChildren(book.blocks, i)) set.add(book.blocks[i].id)
+    })
+    return set
+  }, [book?.blocks])
+
+  const allCollapsed = blocksWithChildren.size > 0 && collapsedIds.size >= blocksWithChildren.size
+
+  function toggleCollapseAll() {
+    if (allCollapsed) {
+      setCollapsedIds(new Set())
+    } else {
+      setCollapsedIds(new Set(blocksWithChildren))
+    }
+  }
+
+  const visibleBlocks = useMemo(
+    () => book ? getVisibleBlocks(book.blocks, 3, collapsedIds) : [],
+    [book?.blocks, collapsedIds],
+  )
+
   // ── Render ───────────────────────────────────────────────────────────────────
 
   if (!loaded) {
@@ -1196,30 +1290,36 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
 
         {/* Canvas */}
         <div className="rounded-xl border border-border bg-card p-3 sm:p-4 space-y-0.5">
-          {book.blocks.map((block, index) => (
-            <BlockRow
-              key={block.id}
-              block={block}
-              textIndent={computeIndent(book.blocks, index)}
-              isDragOver={dragOverId === block.id}
-              isDragging={draggingId === block.id}
-              isReadOnly={isReadOnly}
-              presenceColor={presenceColorForBlock(block.id)}
-              onTextChange={handleTextChange}
-              onKeyDown={handleKeyDown}
-              onDragStart={setDraggingId}
-              onDragOver={setDragOverId}
-              onDrop={handleDrop}
-              onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
-              onDelete={deleteBlock}
-              onFocus={handleBlockFocus}
-              onBlur={handleBlockBlur}
-              inputRef={(el) => {
-                if (el) inputRefs.current.set(block.id, el)
-                else inputRefs.current.delete(block.id)
-              }}
-            />
-          ))}
+          {visibleBlocks.map((block) => {
+            const fullIndex = book.blocks.findIndex((b) => b.id === block.id)
+            return (
+              <BlockRow
+                key={block.id}
+                block={block}
+                textIndent={computeIndent(book.blocks, fullIndex)}
+                isDragOver={dragOverId === block.id}
+                isDragging={draggingId === block.id}
+                isReadOnly={isReadOnly}
+                presenceColor={presenceColorForBlock(block.id)}
+                hasChildren={blocksWithChildren.has(block.id)}
+                isCollapsed={collapsedIds.has(block.id)}
+                onToggleCollapse={toggleCollapse}
+                onTextChange={handleTextChange}
+                onKeyDown={handleKeyDown}
+                onDragStart={setDraggingId}
+                onDragOver={setDragOverId}
+                onDrop={handleDrop}
+                onDragEnd={() => { setDraggingId(null); setDragOverId(null) }}
+                onDelete={deleteBlock}
+                onFocus={handleBlockFocus}
+                onBlur={handleBlockBlur}
+                inputRef={(el) => {
+                  if (el) inputRefs.current.set(block.id, el)
+                  else inputRefs.current.delete(block.id)
+                }}
+              />
+            )
+          })}
 
         </div>
       </div>
@@ -1265,6 +1365,13 @@ export default function BookCanvas({ bookId }: { bookId: string }) {
             >
               <Plus className="size-4" />
               Add Details
+            </button>
+
+            <button
+              onClick={toggleCollapseAll}
+              className="ml-auto text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {allCollapsed ? "Expand all" : "Collapse all"}
             </button>
           </div>
         )

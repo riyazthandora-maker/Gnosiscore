@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { createClient } from "@/lib/supabase/server"
+import { ChangePasswordForm } from "@/components/settings/change-password-form"
 
 export const metadata: Metadata = { title: "Settings" }
 
@@ -19,6 +20,7 @@ export default async function SettingsPage() {
         <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
         <p className="text-muted-foreground">Your account details.</p>
       </div>
+
       <div className="max-w-md rounded-xl border border-border bg-card p-6 space-y-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Name</p>
@@ -45,6 +47,8 @@ export default async function SettingsPage() {
           </p>
         </div>
       </div>
+
+      <ChangePasswordForm />
     </div>
   )
 }

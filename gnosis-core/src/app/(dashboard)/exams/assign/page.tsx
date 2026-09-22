@@ -16,7 +16,7 @@ export default async function AssignPage({
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [examsRes, studentsRes] = await Promise.all([
+  const [examsRes, studentsRes, gradesRes] = await Promise.all([
     supabase
       .from("exam_papers")
       .select("id, title, created_at, questions")
@@ -29,6 +29,12 @@ export default async function AssignPage({
       .eq("teacher_id", user!.id)
       .neq("status", "archived")
       .order("name"),
+
+    supabase
+      .from("student_grades")
+      .select("id, name, teacher_id, created_at")
+      .eq("teacher_id", user!.id)
+      .order("name"),
   ])
 
   const exams = (examsRes.data ?? []).map(e => ({
@@ -39,15 +45,7 @@ export default async function AssignPage({
   }))
 
   const students = (studentsRes.data ?? []) as RosterEntry[]
-
-  // Derive unique grades from student data — no separate query needed
-  const grades: StudentGrade[] = Array.from(
-    new Map(
-      students
-        .filter(s => s.grade_id && s.grade)
-        .map(s => [s.grade_id!, s.grade!])
-    ).values()
-  ).sort((a, b) => a.name.localeCompare(b.name))
+  const grades = (gradesRes.data ?? []) as StudentGrade[]
 
   return (
     <div className="flex flex-col gap-6 p-4 md:p-6 max-w-3xl mx-auto w-full">

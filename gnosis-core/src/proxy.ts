@@ -6,7 +6,7 @@ const PUBLIC_ROUTES = ["/", "/login", "/register", "/logout", "/forgot-password"
 
 const ROLE_ROUTES: Record<UserRole, string[]> = {
   admin:           ["/admin"],
-  educator_parent: ["/documents", "/tests", "/analytics", "/settings"],
+  educator_parent: ["/dashboard", "/books", "/tests", "/analytics", "/settings", "/students", "/exams"],
   student:         ["/student"],
 }
 

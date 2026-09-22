@@ -67,9 +67,18 @@ export default async function StudentPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">My Tests</h1>
-        <p className="text-muted-foreground">Tests assigned to you by your educator.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">My Tests</h1>
+          <p className="text-muted-foreground">Tests assigned to you by your educator.</p>
+        </div>
+        <Link
+          href="/student/pacing"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors shrink-0"
+        >
+          <Calendar className="size-4" />
+          My Schedule
+        </Link>
       </div>
 
       {pendingExam.length === 0 && completedExam.length === 0 && (
