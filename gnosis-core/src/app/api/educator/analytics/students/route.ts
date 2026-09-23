@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 
 export async function GET() {
@@ -7,25 +6,22 @@ export async function GET() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // Get linked student IDs (educator_students policy allows this)
-  const { data: links } = await supabase
-    .from("educator_students")
-    .select("student_id")
-    .eq("educator_id", user.id)
+  // Use student_roster (same source as student management page) — only rows with a linked account
+  const { data: rosterLinks } = await supabase
+    .from("student_roster")
+    .select("student_user_id, name, email")
+    .eq("teacher_id", user.id)
+    .not("student_user_id", "is", null)
 
-  if (!links?.length) return NextResponse.json({ students: [] })
+  if (!rosterLinks?.length) return NextResponse.json({ students: [] })
 
-  const studentIds = links.map((l) => l.student_id)
+  const studentIds = rosterLinks.map((r) => r.student_user_id as string)
 
-  // Fetch student profiles via admin client — users_self RLS would block cross-user reads
-  const adminDb = createAdminClient()
-  const { data: profiles } = await adminDb
-    .from("users")
-    .select("id, full_name, email")
-    .in("id", studentIds)
-    .eq("role", "student")
-
-  if (!profiles?.length) return NextResponse.json({ students: [] })
+  const profiles = rosterLinks.map((r) => ({
+    id: r.student_user_id as string,
+    full_name: r.name,
+    email: r.email,
+  }))
 
   // Get educator's test IDs to scope assignments + attempts
   const { data: tests } = await supabase

@@ -65,7 +65,7 @@ export async function POST(req: Request) {
 
   // Fetch educator profile for email
   const { data: profile } = await supabase
-    .from("profiles")
+    .from("users")
     .select("full_name")
     .eq("id", user.id)
     .single()

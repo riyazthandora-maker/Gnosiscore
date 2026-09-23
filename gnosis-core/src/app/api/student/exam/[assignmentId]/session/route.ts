@@ -138,9 +138,9 @@ export async function PATCH(req: Request, { params }: Params) {
     const adminDb = createAdminClient()
     const assignedBy = (assignment as { assigned_by?: string } | null)?.assigned_by ?? ""
     void Promise.all([
-      Promise.resolve(adminDb.from("profiles").select("full_name, email").eq("id", assignedBy).single()),
-      Promise.resolve(adminDb.from("profiles").select("full_name").eq("id", user.id).single()),
-      Promise.resolve(adminDb.from("exam_assignments").select("exam_papers(title)").eq("id", assignmentId).single()),
+      adminDb.from("users").select("full_name, email").eq("id", assignedBy).single(),
+      adminDb.from("users").select("full_name").eq("id", user.id).single(),
+      adminDb.from("exam_assignments").select("exam_papers(title)").eq("id", assignmentId).single(),
     ]).then(([teacherRes, studentRes, asgnRes]) => {
       const teacher = teacherRes.data
       const studentProfile = studentRes.data
