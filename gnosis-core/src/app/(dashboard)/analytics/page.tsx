@@ -3,13 +3,12 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
-import { BarChart3, Users, Loader2, ChevronUp, ChevronDown, ExternalLink, Brain } from "lucide-react"
+import { BarChart3, Users, ChevronUp, ChevronDown, Brain } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface TestRow {
   id: string
   title: string
-  is_published: boolean
   question_count: number
   created_at: string
   assigned: number
@@ -98,7 +97,7 @@ function TestsTab() {
 
   if (!data?.tests.length) return (
     <div className="py-16 text-center text-sm text-muted-foreground">
-      No tests yet. <Link href="/tests/generate" className="text-primary hover:underline">Generate questions</Link> to get started.
+      No tests yet. <Link href="/exams/new" className="text-primary hover:underline">Generate questions</Link> to get started.
     </div>
   )
 
@@ -120,19 +119,13 @@ function TestsTab() {
                 <SortButton label={label} sortKey={key} current={sortKey} dir={sortDir} onSort={toggleSort} />
               </th>
             ))}
-            <th className="px-4 py-3" />
           </tr>
         </thead>
         <tbody>
           {sorted.map((test) => (
             <tr key={test.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
               <td className="px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{test.title}</span>
-                  {!test.is_published && (
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">Draft</span>
-                  )}
-                </div>
+                <span className="font-medium">{test.title}</span>
                 <p className="text-xs text-muted-foreground">{test.question_count} questions · {formatDate(test.created_at)}</p>
               </td>
               <td className="px-4 py-3 tabular-nums">{test.assigned}</td>
@@ -146,14 +139,6 @@ function TestsTab() {
               </td>
               <td className="px-4 py-3"><ScoreBadge pct={test.avg_score} /></td>
               <td className="px-4 py-3"><ScoreBadge pct={test.pass_rate} /></td>
-              <td className="px-4 py-3">
-                <Link
-                  href={`/tests/${test.id}/analytics`}
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                >
-                  Details <ExternalLink className="size-3" />
-                </Link>
-              </td>
             </tr>
           ))}
         </tbody>
@@ -174,7 +159,7 @@ function StudentsTab() {
 
   if (!data?.students.length) return (
     <div className="py-16 text-center text-sm text-muted-foreground">
-      No students linked yet. <Link href="/tests" className="text-primary hover:underline">Assign a test</Link> to add students.
+      No students linked yet. <Link href="/assignments" className="text-primary hover:underline">Assign a test</Link> to add students.
     </div>
   )
 

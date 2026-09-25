@@ -1,7 +1,17 @@
 import { createClient } from "@/lib/supabase/server"
-import { createAdminClient } from "@/lib/supabase/admin"
 import { NextResponse } from "next/server"
 import { genAI, DIAGNOSTIC_MODEL, withRetry } from "@/lib/ai/gemini"
+import { firstAttempt, isCompleted, scorePct, type SessionScoreRow } from "@/lib/exam/scoring"
+import type { ExamQuestion } from "@/types"
+
+type SessionRow = SessionScoreRow & { id: string; answers: Record<string, string> | null }
+
+interface AssignmentRow {
+  id: string
+  paper_id: string
+  exam_papers: { id: string; title: string; questions: ExamQuestion[] } | null
+  exam_sessions: SessionRow[]
+}
 
 export async function GET(
   _req: Request,
@@ -12,138 +22,96 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+  // Fall back to auth metadata — the profile row can be missing if the student
+  // signed up while the on_auth_user_created trigger was absent.
   const { data: profile } = await supabase
     .from("users")
-    .select("role, account_status")
+    .select("role")
     .eq("id", user.id)
-    .single()
+    .maybeSingle()
 
-  if (profile?.role !== "educator_parent") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  const role = profile?.role ?? (user.user_metadata?.role as string | undefined)
+  if (role !== "educator_parent") return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 
-  // Verify educator-student link
-  const { data: link } = await supabase
-    .from("educator_students")
-    .select("id")
-    .eq("educator_id", user.id)
-    .eq("student_id", studentId)
-    .single()
+  // The teacher↔student link lives in student_roster. RLS already scopes this to
+  // rows owned by the caller, so a missing row means "not your student".
+  const { data: entry } = await supabase
+    .from("student_roster")
+    .select("id, name, email")
+    .eq("teacher_id", user.id)
+    .eq("student_user_id", studentId)
+    .maybeSingle()
 
-  if (!link) return NextResponse.json({ error: "Student not linked to your account." }, { status: 403 })
+  if (!entry) return NextResponse.json({ error: "Student not linked to your account." }, { status: 403 })
 
-  // Fetch student profile via admin client — RLS blocks educators from reading other users' rows
-  const adminDb = createAdminClient()
-  const { data: student } = await adminDb
-    .from("users")
-    .select("id, full_name, email")
-    .eq("id", studentId)
-    .single()
+  const student = { id: studentId, full_name: entry.name, email: entry.email }
 
-  if (!student) return NextResponse.json({ error: "Student not found." }, { status: 404 })
+  const { data: assignmentData } = await supabase
+    .from("exam_assignments")
+    .select(`
+      id, paper_id,
+      exam_papers ( id, title, questions ),
+      exam_sessions ( id, status, score, max_score, attempt_number, completed_at, answers )
+    `)
+    .eq("student_roster_id", entry.id)
+    .eq("assigned_by", user.id)
 
-  // Fetch all completed first attempts by this student for tests created by this educator
-  const { data: attempts } = await supabase
-    .from("test_attempts")
-    .select("id, test_id, score, max_score, answers, config_snapshot, started_at, completed_at, attempt_number, is_first_attempt")
-    .eq("student_id", studentId)
-    .not("completed_at", "is", null)
-    .order("completed_at", { ascending: false })
+  const assignments = (assignmentData ?? []) as unknown as AssignmentRow[]
 
-  const allAttempts = attempts ?? []
+  // One row per exam — the first attempt, so retakes don't double-count.
+  const attempts = assignments
+    .map((assignment) => ({ assignment, attempt: firstAttempt(assignment.exam_sessions ?? []) }))
+    .filter((x): x is { assignment: AssignmentRow; attempt: SessionRow } => x.attempt !== null)
 
-  // Filter to first attempts only for teacher dashboard
-  const firstAttempts = allAttempts.filter((a) => a.is_first_attempt)
+  const examHistory = attempts.map(({ assignment, attempt }) => {
+    const completedCount = (assignment.exam_sessions ?? []).filter((s) => isCompleted(s.status)).length
+    return {
+      attempt_id: attempt.id,
+      test_id: assignment.paper_id,
+      test_title: assignment.exam_papers?.title ?? "Unknown",
+      score: attempt.score ?? 0,
+      max_score: attempt.max_score ?? 0,
+      pct: scorePct(attempt) ?? 0,
+      completed_at: attempt.completed_at ?? "",
+      total_attempts: completedCount,
+    }
+  })
 
-  // Fetch test titles for the attempts
-  const testIds = [...new Set(firstAttempts.map((a) => a.test_id))]
-  const { data: tests } = await supabase
-    .from("tests")
-    .select("id, title")
-    .in("id", testIds.length > 0 ? testIds : ["00000000-0000-0000-0000-000000000000"])
-    .eq("creator_id", user.id)
-
-  const testMap: Record<string, string> = {}
-  for (const t of tests ?? []) testMap[t.id] = t.title
-
-  // Build exam history (only tests created by this educator)
-  const examHistory = firstAttempts
-    .filter((a) => testMap[a.test_id])
-    .map((a) => {
-      const snap = a.config_snapshot as Record<string, unknown>
-      const pct = a.max_score ? Math.round((a.score / a.max_score) * 100) : 0
-      return {
-        attempt_id: a.id,
-        test_id: a.test_id,
-        test_title: testMap[a.test_id] ?? (snap?.title as string) ?? "Unknown",
-        score: a.score,
-        max_score: a.max_score,
-        pct,
-        completed_at: a.completed_at,
-        total_attempts: allAttempts.filter((x) => x.test_id === a.test_id).length,
-      }
-    })
-
-  // Class average per test (all students on these tests)
+  // Class average per paper, across every student the teacher assigned it to
+  const paperIds = [...new Set(attempts.map(({ assignment }) => assignment.paper_id))]
   const classAverages: Record<string, number> = {}
-  if (testIds.length > 0) {
-    const { data: classAttempts } = await supabase
-      .from("test_attempts")
-      .select("test_id, score, max_score")
-      .in("test_id", testIds)
-      .eq("is_first_attempt", true)
-      .not("completed_at", "is", null)
+  if (paperIds.length > 0) {
+    const { data: classData } = await supabase
+      .from("exam_assignments")
+      .select("paper_id, exam_sessions ( status, score, max_score, attempt_number, completed_at )")
+      .eq("assigned_by", user.id)
+      .in("paper_id", paperIds)
 
-    const grouped: Record<string, { total: number; count: number }> = {}
-    for (const ca of classAttempts ?? []) {
-      if (!grouped[ca.test_id]) grouped[ca.test_id] = { total: 0, count: 0 }
-      grouped[ca.test_id].total += ca.max_score ? (ca.score / ca.max_score) * 100 : 0
-      grouped[ca.test_id].count++
+    const grouped: Record<string, number[]> = {}
+    const rows = (classData ?? []) as unknown as { paper_id: string; exam_sessions: SessionScoreRow[] }[]
+    for (const row of rows) {
+      const attempt = firstAttempt(row.exam_sessions ?? [])
+      if (!attempt) continue
+      const pct = scorePct(attempt)
+      if (pct === null) continue
+      ;(grouped[row.paper_id] ??= []).push(pct)
     }
-    for (const [tid, { total, count }] of Object.entries(grouped)) {
-      classAverages[tid] = Math.round(total / count)
+
+    for (const [paperId, values] of Object.entries(grouped)) {
+      classAverages[paperId] = Math.round(values.reduce((s, v) => s + v, 0) / values.length)
     }
   }
 
-  // Topic accuracy across all first attempts
+  // Topic accuracy — derived from the paper's own questions, no questions table
   const topicStats: Record<string, { correct: number; total: number }> = {}
-  for (const attempt of firstAttempts) {
-    const answers = attempt.answers as Record<string, unknown>
-    if (!answers || typeof answers !== "object") continue
-    // answers contains graded data stored from the submit route
-    // We need to re-fetch questions to get topic_tags — use config_snapshot or stored answers
-    // answers is { questionId: studentLabel } — we need to check correctness against questions
-    // For topic tracking, fetch the questions for these test_ids
-  }
-
-  // Fetch questions for all test_ids to compute topic accuracy
-  const { data: allQuestions } = await supabase
-    .from("questions")
-    .select("id, topic_tags, options")
-    .in(
-      "id",
-      [...new Set(
-        firstAttempts.flatMap((a) => Object.keys(a.answers as Record<string, unknown> ?? {}))
-      )].slice(0, 500)
-    )
-
-  const questionMap: Record<string, { topic_tags: string[]; correct_label: string | null }> = {}
-  for (const q of allQuestions ?? []) {
-    const opts = q.options as { label: string; is_correct: boolean }[]
-    questionMap[q.id] = {
-      topic_tags: q.topic_tags ?? [],
-      correct_label: opts.find((o) => o.is_correct)?.label ?? null,
-    }
-  }
-
-  for (const attempt of firstAttempts) {
-    const answers = attempt.answers as Record<string, string>
-    for (const [qid, studentLabel] of Object.entries(answers)) {
-      const q = questionMap[qid]
-      if (!q) continue
-      for (const tag of q.topic_tags) {
-        if (!topicStats[tag]) topicStats[tag] = { correct: 0, total: 0 }
-        topicStats[tag].total++
-        if (q.correct_label && studentLabel === q.correct_label) topicStats[tag].correct++
-      }
+  for (const { assignment, attempt } of attempts) {
+    const answers = attempt.answers ?? {}
+    for (const question of assignment.exam_papers?.questions ?? []) {
+      const topic = question.topic
+      if (!topic) continue
+      if (!topicStats[topic]) topicStats[topic] = { correct: 0, total: 0 }
+      topicStats[topic].total++
+      if (answers[question.id] === question.correct) topicStats[topic].correct++
     }
   }
 
@@ -157,12 +125,10 @@ export async function GET(
     .sort((a, b) => b.total - a.total)
     .slice(0, 20)
 
-  // Score trend (chronological)
   const scoreTrend = [...examHistory]
-    .sort((a, b) => new Date(a.completed_at!).getTime() - new Date(b.completed_at!).getTime())
+    .sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime())
     .map((e) => ({ test_title: e.test_title, pct: e.pct, completed_at: e.completed_at }))
 
-  // AI advisory — skip if no data
   let aiAdvisory: string | null = null
   if (examHistory.length > 0 && topicAccuracy.length > 0) {
     try {

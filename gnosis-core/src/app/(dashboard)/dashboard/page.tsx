@@ -26,21 +26,33 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [testsRes, studentsRes, questionsRes, recentRes] = await Promise.all([
-    supabase.from("tests").select("id, is_published").eq("creator_id", user!.id),
-    supabase.from("educator_students").select("student_id", { count: "exact", head: true }).eq("educator_id", user!.id),
+  const [papersRes, studentsRes, questionsRes, completionsRes, recentRes] = await Promise.all([
+    supabase.from("exam_papers").select("id", { count: "exact", head: true }).eq("teacher_id", user!.id),
+    supabase.from("student_roster").select("id", { count: "exact", head: true }).eq("teacher_id", user!.id),
     supabase.from("questions").select("id", { count: "exact", head: true }).eq("owner_id", user!.id).eq("status", "approved"),
-    // Recent test completions from educator's tests
     supabase
-      .from("test_attempts")
-      .select("id, score, max_score, completed_at, tests!inner(creator_id, title), users!student_id(full_name)")
-      .eq("tests.creator_id", user!.id)
-      .not("completed_at", "is", null)
+      .from("exam_sessions")
+      .select("id, exam_assignments!inner(assigned_by)", { count: "exact", head: true })
+      .eq("exam_assignments.assigned_by", user!.id)
+      .in("status", ["submitted", "auto_submitted"]),
+    // Recent exam submissions by this teacher's students
+    supabase
+      .from("exam_sessions")
+      .select(`
+        id, score, max_score, completed_at,
+        exam_assignments!inner (
+          assigned_by,
+          exam_papers ( title ),
+          student_roster ( name )
+        )
+      `)
+      .eq("exam_assignments.assigned_by", user!.id)
+      .in("status", ["submitted", "auto_submitted"])
       .order("completed_at", { ascending: false })
       .limit(6),
   ])
 
-  const tests = testsRes.data ?? []
+  const paperCount = papersRes.count ?? 0
   const recentAttempts = recentRes.data ?? []
 
   return (
@@ -52,16 +64,12 @@ export default async function DashboardPage() {
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Students linked" value={studentsRes.count ?? 0} sub="registered students" />
-        <StatCard
-          label="Tests"
-          value={tests.length}
-          sub={`${tests.filter((t) => t.is_published).length} published`}
-        />
+        <StatCard label="Students linked" value={studentsRes.count ?? 0} sub="in your class" />
+        <StatCard label="Tests" value={paperCount} sub="exam papers created" />
         <StatCard label="Approved questions" value={questionsRes.count ?? 0} sub="in your bank" />
         <StatCard
           label="Test completions"
-          value={recentAttempts.length > 0 ? recentAttempts.length + "+" : 0}
+          value={completionsRes.count ?? 0}
           sub="by your students"
           accent
         />
@@ -73,7 +81,7 @@ export default async function DashboardPage() {
         <div className="grid gap-3 sm:grid-cols-3">
           {[
             { href: "/assignments", icon: ClipboardList, label: "Assign test", desc: "Send tests to students" },
-            { href: "/tests/generate", icon: Plus, label: "Generate questions", desc: "AI-powered from your books" },
+            { href: "/exams/new", icon: Plus, label: "Generate questions", desc: "AI-powered from your books" },
             { href: "/analytics", icon: BarChart3, label: "View analytics", desc: "Test and student results" },
           ].map(({ href, icon: Icon, label, desc }) => (
             <Link
@@ -117,8 +125,12 @@ export default async function DashboardPage() {
         ) : (
           <div className="space-y-2">
             {recentAttempts.map((attempt, idx) => {
-              const profile = attempt.users as unknown as { full_name: string }
-              const test = attempt.tests as unknown as { title: string }
+              const assignment = attempt.exam_assignments as unknown as {
+                exam_papers: { title: string } | null
+                student_roster: { name: string } | null
+              }
+              const studentName = assignment?.student_roster?.name ?? "Student"
+              const testTitle = assignment?.exam_papers?.title ?? "Test"
               const pct = attempt.max_score && attempt.max_score > 0
                 ? Math.round(((attempt.score ?? 0) / (attempt.max_score as number)) * 100)
                 : null
@@ -130,8 +142,8 @@ export default async function DashboardPage() {
                   <CheckCircle2 className="size-4 shrink-0 text-green-500" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm">
-                      <span className="font-medium">{profile?.full_name ?? "Student"}</span>
-                      <span className="text-muted-foreground"> · {test?.title ?? "Test"}</span>
+                      <span className="font-medium">{studentName}</span>
+                      <span className="text-muted-foreground"> · {testTitle}</span>
                     </p>
                     {attempt.completed_at && (
                       <p className="text-xs text-muted-foreground">{formatDate(attempt.completed_at)}</p>
@@ -153,7 +165,7 @@ export default async function DashboardPage() {
       </section>
 
       {/* Empty-state nudge when no tests yet */}
-      {tests.length === 0 && (
+      {paperCount === 0 && (
         <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-6 text-center space-y-3">
           <BookOpen className="mx-auto size-8 text-primary/50" />
           <p className="font-medium">No tests yet — get started</p>

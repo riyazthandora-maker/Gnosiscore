@@ -70,7 +70,7 @@ export async function PATCH(
       questionCount: genReq.question_count,
       type: action === "approve" ? "approved" : "rejected",
       adminNote: note ?? null,
-      reviewUrl: `${appUrl}/tests/review`,
+      reviewUrl: `${appUrl}/exams/new`,
     })
   }).catch((err: Error) => console.error("[generation-request] email failed:", err?.message))
 
@@ -148,22 +148,7 @@ async function runGeneration(
       status: "pending_review",
     }))
 
-    const { data: insertedQs } = await adminDb.from("questions").insert(rows).select("id")
-    const questionIds = (insertedQs ?? []).map((q) => q.id)
-
-    // Create a draft test for the review screen
-    const { data: draftTest } = await adminDb
-      .from("tests")
-      .insert({
-        creator_id: genReq.requested_by,
-        title: genReq.name || "Generated Test",
-        question_ids: questionIds,
-        is_published: false,
-      })
-      .select("id")
-      .single()
-
-    const testId = draftTest?.id
+    await adminDb.from("questions").insert(rows)
 
     await Promise.all([
       adminDb
@@ -173,14 +158,14 @@ async function runGeneration(
       adminDb.rpc("increment_educator_tokens", { p_user_id: genReq.requested_by, p_delta: tokensUsed }),
     ])
 
-    // Notify educator that questions are ready to review
+    // Notify educator that their questions are ready
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://gnosiscore.ai"
-    const reviewUrl = testId ? `${appUrl}/tests/${testId}/review` : `${appUrl}/tests/review`
+    const reviewUrl = `${appUrl}/exams/new`
 
     await adminDb.from("notifications").insert({
       user_id: genReq.requested_by,
       type: "questions_ready",
-      payload: { request_id: genReq.id, test_id: testId ?? null, count: rows.length },
+      payload: { request_id: genReq.id, count: rows.length },
     })
 
     // Email educator — fire-and-forget

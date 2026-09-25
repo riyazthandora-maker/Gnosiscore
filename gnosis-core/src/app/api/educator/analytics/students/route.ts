@@ -1,77 +1,65 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { firstAttempt, meanPct, scorePct, type SessionScoreRow } from "@/lib/exam/scoring"
+
+interface AssignmentRow {
+  id: string
+  student_roster_id: string
+  exam_sessions: SessionScoreRow[]
+}
 
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // Use student_roster (same source as student management page) — only rows with a linked account
-  const { data: rosterLinks } = await supabase
+  // student_roster (not educator_students) is the source of truth for who is in
+  // this teacher's class — only rows with a linked account can have results.
+  const { data: roster } = await supabase
     .from("student_roster")
-    .select("student_user_id, name, email")
+    .select("id, student_user_id, name, email")
     .eq("teacher_id", user.id)
     .not("student_user_id", "is", null)
 
-  if (!rosterLinks?.length) return NextResponse.json({ students: [] })
+  if (!roster?.length) return NextResponse.json({ students: [] })
 
-  const studentIds = rosterLinks.map((r) => r.student_user_id as string)
+  const { data: assignmentData } = await supabase
+    .from("exam_assignments")
+    .select("id, student_roster_id, exam_sessions(status, score, max_score, attempt_number, completed_at)")
+    .eq("assigned_by", user.id)
 
-  const profiles = rosterLinks.map((r) => ({
-    id: r.student_user_id as string,
-    full_name: r.name,
-    email: r.email,
-  }))
+  const assignments = (assignmentData ?? []) as unknown as AssignmentRow[]
 
-  // Get educator's test IDs to scope assignments + attempts
-  const { data: tests } = await supabase
-    .from("tests")
-    .select("id")
-    .eq("creator_id", user.id)
-
-  const testIds = tests?.map((t) => t.id) ?? []
-
-  if (!testIds.length) {
-    const students = profiles.map((p) => ({
-      id: p.id, full_name: p.full_name, email: p.email,
-      assigned: 0, completed: 0, avg_score: null, last_attempt_at: null,
-    }))
-    return NextResponse.json({ students })
+  const byRoster = new Map<string, AssignmentRow[]>()
+  for (const a of assignments) {
+    const list = byRoster.get(a.student_roster_id)
+    if (list) list.push(a)
+    else byRoster.set(a.student_roster_id, [a])
   }
 
-  const { data: attemptsData } = await supabase
-    .from("test_attempts")
-    .select("student_id, test_id, score, max_score, completed_at")
-    .in("student_id", studentIds)
-    .in("test_id", testIds)
-    .not("completed_at", "is", null)
+  const students = roster.map((entry) => {
+    const mine = byRoster.get(entry.id) ?? []
+    const attempts = mine
+      .map((a) => firstAttempt(a.exam_sessions ?? []))
+      .filter((s): s is SessionScoreRow => s !== null)
 
-  const attempts = attemptsData ?? []
+    const scores = attempts
+      .map(scorePct)
+      .filter((p): p is number => p !== null)
 
-  const students = profiles.map((profile) => {
-    const sid = profile.id
-
-    const studentAttempts = attempts.filter((a) => a.student_id === sid)
-
-    const scores = studentAttempts
-      .filter((a) => a.max_score && a.max_score > 0)
-      .map((a) => Math.round(((a.score ?? 0) / (a.max_score as number)) * 100))
-
-    const avgScore = scores.length > 0
-      ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
-      : null
-
-    const lastAttempt = studentAttempts
-      .sort((a, b) => new Date(b.completed_at!).getTime() - new Date(a.completed_at!).getTime())[0]
+    const completedTimes = attempts
+      .map((s) => s.completed_at)
+      .filter((t): t is string => t !== null)
+      .sort()
 
     return {
-      id: sid,
-      full_name: profile.full_name,
-      email: profile.email,
-      assigned: 0,
-      completed: studentAttempts.length,
-      avg_score: avgScore,
-      last_attempt_at: lastAttempt?.completed_at ?? null,
+      id: entry.student_user_id as string,
+      full_name: entry.name,
+      email: entry.email,
+      assigned: mine.length,
+      completed: attempts.length,
+      avg_score: meanPct(scores),
+      last_attempt_at: completedTimes.length > 0 ? completedTimes[completedTimes.length - 1] : null,
     }
   })
 

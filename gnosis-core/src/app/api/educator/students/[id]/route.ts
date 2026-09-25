@@ -102,7 +102,7 @@ export async function PATCH(
   return NextResponse.json({ student: data })
 }
 
-// DELETE /api/educator/students/[id] — remove from roster + unlink
+// DELETE /api/educator/students/[id] — remove a student from the roster
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -113,10 +113,9 @@ export async function DELETE(
   const user = await getEducator(supabase)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  // Fetch the roster entry to get student_user_id
   const { data: entry } = await supabase
     .from("student_roster")
-    .select("student_user_id")
+    .select("id")
     .eq("id", id)
     .eq("teacher_id", user.id)
     .maybeSingle()
@@ -132,16 +131,6 @@ export async function DELETE(
   if (error) {
     console.error("[students DELETE]", error.message)
     return NextResponse.json({ error: error.message }, { status: 500 })
-  }
-
-  // Unlink from educator_students if the student has an account
-  if (entry.student_user_id) {
-    const adminDb = createAdminClient()
-    await adminDb
-      .from("educator_students")
-      .delete()
-      .eq("educator_id", user.id)
-      .eq("student_id", entry.student_user_id)
   }
 
   return NextResponse.json({ success: true })

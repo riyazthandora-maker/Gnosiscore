@@ -1,56 +1,65 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
+import { firstAttempt, meanPct, scorePct, type SessionScoreRow } from "@/lib/exam/scoring"
+
+interface PaperAssignmentRow {
+  id: string
+  paper_id: string
+  threshold_pass: number
+  exam_sessions: SessionScoreRow[]
+}
 
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { data: tests } = await supabase
-    .from("tests")
-    .select("id, title, question_ids, is_published, created_at")
-    .eq("creator_id", user.id)
+  const { data: papers } = await supabase
+    .from("exam_papers")
+    .select("id, title, questions, created_at")
+    .eq("teacher_id", user.id)
     .order("created_at", { ascending: false })
 
-  if (!tests?.length) return NextResponse.json({ tests: [] })
+  if (!papers?.length) return NextResponse.json({ tests: [] })
 
-  const testIds = tests.map((t) => t.id)
+  const { data: assignmentData } = await supabase
+    .from("exam_assignments")
+    .select("id, paper_id, threshold_pass, exam_sessions(status, score, max_score, attempt_number, completed_at)")
+    .eq("assigned_by", user.id)
 
-  const { data: attemptsData } = await supabase
-    .from("test_attempts")
-    .select("test_id, score, max_score")
-    .in("test_id", testIds)
-    .not("completed_at", "is", null)
+  const assignments = (assignmentData ?? []) as unknown as PaperAssignmentRow[]
 
-  const attempts = attemptsData ?? []
+  const byPaper = new Map<string, PaperAssignmentRow[]>()
+  for (const a of assignments) {
+    const list = byPaper.get(a.paper_id)
+    if (list) list.push(a)
+    else byPaper.set(a.paper_id, [a])
+  }
 
-  const result = tests.map((test) => {
-    const testAttempts = attempts.filter((a) => a.test_id === test.id)
+  const tests = papers.map((paper) => {
+    const mine = byPaper.get(paper.id) ?? []
 
-    const scores = testAttempts
-      .filter((a) => a.max_score && a.max_score > 0)
-      .map((a) => Math.round(((a.score ?? 0) / (a.max_score as number)) * 100))
+    const attempts = mine
+      .map((a) => ({ attempt: firstAttempt(a.exam_sessions ?? []), passMark: a.threshold_pass }))
+      .filter((x): x is { attempt: SessionScoreRow; passMark: number } => x.attempt !== null)
 
-    const avgScore = scores.length > 0
-      ? Math.round(scores.reduce((s, v) => s + v, 0) / scores.length)
-      : null
-
-    const passRate = scores.length > 0
-      ? Math.round((scores.filter((s) => s >= 60).length / scores.length) * 100)
-      : null
+    const scored = attempts
+      .map(({ attempt, passMark }) => ({ pct: scorePct(attempt), passMark }))
+      .filter((x): x is { pct: number; passMark: number } => x.pct !== null)
 
     return {
-      id: test.id,
-      title: test.title,
-      is_published: test.is_published,
-      question_count: (test.question_ids as string[]).length,
-      created_at: test.created_at,
-      assigned: 0,
-      completed: testAttempts.length,
-      avg_score: avgScore,
-      pass_rate: passRate,
+      id: paper.id,
+      title: paper.title,
+      question_count: Array.isArray(paper.questions) ? paper.questions.length : 0,
+      created_at: paper.created_at,
+      assigned: mine.length,
+      completed: attempts.length,
+      avg_score: meanPct(scored.map((s) => s.pct)),
+      pass_rate: scored.length > 0
+        ? Math.round((scored.filter((s) => s.pct >= s.passMark).length / scored.length) * 100)
+        : null,
     }
   })
 
-  return NextResponse.json({ tests: result })
+  return NextResponse.json({ tests })
 }

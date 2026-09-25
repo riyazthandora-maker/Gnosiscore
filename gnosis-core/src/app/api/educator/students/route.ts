@@ -26,38 +26,13 @@ function generateToken(): string {
   return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("")
 }
 
-// GET /api/educator/students
-// ?view=roster  → returns student_roster entries (student management page)
-// default       → returns educator_students linked accounts (test assignment, backward compat)
+// GET /api/educator/students — the teacher's class roster (student management page)
 export async function GET(request: Request) {
   const supabase = await createClient()
   const user = await getEducator(supabase)
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
   const { searchParams } = new URL(request.url)
-  const view = searchParams.get("view")
-
-  // Legacy behavior for test assignment flows
-  if (view !== "roster") {
-    const { data: links } = await supabase
-      .from("educator_students")
-      .select("student_id")
-      .eq("educator_id", user.id)
-
-    if (!links || links.length === 0) return NextResponse.json({ students: [] })
-
-    const studentIds = links.map((l) => l.student_id)
-    const adminDb = createAdminClient()
-    const { data: students } = await adminDb
-      .from("users")
-      .select("id, email, full_name")
-      .in("id", studentIds)
-      .order("full_name", { ascending: true })
-
-    return NextResponse.json({ students: students ?? [] })
-  }
-
-  // Roster view — for student management page
   const search = searchParams.get("search")?.trim() ?? ""
   const gradeId = searchParams.get("grade_id") ?? ""
   const status = searchParams.get("status") ?? ""
@@ -162,13 +137,6 @@ export async function POST(request: Request) {
       console.error("[students POST auto-link]", insertErr.message)
       return NextResponse.json({ error: insertErr.message }, { status: 500 })
     }
-
-    await adminDb
-      .from("educator_students")
-      .upsert(
-        { educator_id: user.id, student_id: existingUser.id },
-        { onConflict: "educator_id,student_id" }
-      )
 
     return NextResponse.json({ student: entry, linked: true }, { status: 201 })
   }

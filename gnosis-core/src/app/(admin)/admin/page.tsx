@@ -20,7 +20,7 @@ export default async function AdminPage() {
       .eq("status", "pending_admin"),
     supabase.from("users").select("*", { count: "exact", head: true })
       .neq("role", "admin"),
-    supabase.from("tests").select("*", { count: "exact", head: true }),
+    supabase.from("exam_papers").select("*", { count: "exact", head: true }),
   ])
 
   const pendingCards = [

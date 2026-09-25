@@ -25,6 +25,11 @@ export async function POST(request: Request) {
   if (!password || password.length < 8) {
     return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 })
   }
+  // Self-registration is limited to these two roles. Without this check a caller
+  // could pass role: "admin" and be granted an approved admin account.
+  if (role !== "student" && role !== "educator_parent") {
+    return NextResponse.json({ error: "Invalid role." }, { status: 400 })
+  }
 
   // Educator/parent registrations require email OTP verification
   if (role === "educator_parent") {
@@ -40,7 +45,7 @@ export async function POST(request: Request) {
   const userMeta = { full_name, role }
 
   if (IS_DEV) {
-    const { error: createErr } = await supabase.auth.admin.createUser({
+    const { data: created, error: createErr } = await supabase.auth.admin.createUser({
       email: email.trim(),
       email_confirm: true,
       password,
@@ -90,6 +95,10 @@ export async function POST(request: Request) {
       }
     }
 
+    if (!createErr && created?.user) {
+      await ensureProfileRow(supabase, created.user.id, email.trim(), full_name, role)
+    }
+
     if (!createErr && role === "educator_parent") {
       const { data: adminUser } = await supabase.from("users").select("email").eq("role", "admin").limit(1).single()
       if (adminUser?.email) {
@@ -112,7 +121,7 @@ export async function POST(request: Request) {
   }
 
   // Production — create confirmed user with their chosen password (no SMTP needed)
-  const { error: createErr } = await supabase.auth.admin.createUser({
+  const { data: created, error: createErr } = await supabase.auth.admin.createUser({
     email: email.trim(),
     email_confirm: true,
     password,
@@ -160,6 +169,10 @@ export async function POST(request: Request) {
     }
   }
 
+  if (!createErr && created?.user) {
+    await ensureProfileRow(supabase, created.user.id, email.trim(), full_name, role)
+  }
+
   if (!createErr && role === "educator_parent") {
     const { data: adminUser } = await supabase.from("users").select("email").eq("role", "admin").limit(1).single()
     if (adminUser?.email) {
@@ -187,7 +200,7 @@ async function autoLinkRosterInvites(
 ): Promise<void> {
   const { data: pending } = await adminDb
     .from("student_roster")
-    .select("id, teacher_id")
+    .select("id")
     .eq("email", normalizedEmail)
     .eq("status", "invited")
 
@@ -211,12 +224,31 @@ async function autoLinkRosterInvites(
         updated_at: new Date().toISOString(),
       })
       .eq("id", entry.id)
-
-    await adminDb
-      .from("educator_students")
-      .upsert(
-        { educator_id: entry.teacher_id, student_id: newUser.id },
-        { onConflict: "educator_id,student_id" }
-      )
   }
+}
+
+// Defensive: the on_auth_user_created trigger normally creates this row, but it
+// is dropped by supabase/reset.sql and only restored by
+// supabase/fix-users-trigger.sql. Registration must not depend on that.
+async function ensureProfileRow(
+  adminDb: ReturnType<typeof createAdminClient>,
+  userId: string,
+  email: string,
+  fullName: string | undefined,
+  role: string
+): Promise<void> {
+  const { error } = await adminDb
+    .from("users")
+    .upsert(
+      {
+        id: userId,
+        email,
+        full_name: fullName ?? "",
+        role,
+        account_status: role === "educator_parent" ? "pending" : "approved",
+      },
+      { onConflict: "id", ignoreDuplicates: true }
+    )
+
+  if (error) console.error("[register] profile row upsert failed:", error.message)
 }

@@ -47,13 +47,6 @@ export interface User {
   created_at: string
 }
 
-export interface EducatorStudent {
-  id: string
-  educator_id: string
-  student_id: string
-  linked_at: string
-}
-
 export interface QuestionOption {
   label: 'A' | 'B' | 'C' | 'D'
   text: string
@@ -92,44 +85,6 @@ export interface GenerationRequest {
   reviewed_at: string | null
   admin_note: string | null
   created_at: string
-}
-
-export interface Test {
-  id: string
-  creator_id: string
-  title: string
-  description: string | null
-  question_ids: string[]
-  time_limit_min: number | null
-  is_published: boolean
-  created_at: string
-}
-
-export interface TestAssignment {
-  id: string
-  test_id: string
-  student_id: string
-  assigned_by: string
-  due_at: string | null
-  time_limit_minutes: number
-  show_timer: boolean
-  show_answer_key: boolean
-  allow_retake: boolean
-  starts_at: string | null
-  ends_at: string | null
-  assigned_at: string
-}
-
-export interface TestAttempt {
-  id: string
-  test_id: string
-  student_id: string
-  answers: Record<string, number>
-  score: number | null
-  max_score: number | null
-  config_snapshot: Record<string, unknown>
-  started_at: string
-  completed_at: string | null
 }
 
 export interface Notification {
