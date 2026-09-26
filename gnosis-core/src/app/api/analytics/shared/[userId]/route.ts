@@ -1,7 +1,12 @@
 import { createClient } from "@/lib/supabase/server"
 import { NextResponse } from "next/server"
-import type { ConfigSnapshot } from "@/types"
+import type { ConfigSnapshot, DiagnosticReport } from "@/types"
 import type { OverviewStats, HistoryPoint, TopicStat, AnalyticsPayload } from "@/app/api/analytics/route"
+
+export interface SharedPayload extends AnalyticsPayload {
+  ownerName: string
+  diagnosticReport: DiagnosticReport | null
+}
 
 export async function GET(
   _req: Request,
@@ -29,6 +34,15 @@ export async function GET(
     .eq("id", userId)
     .single()
 
+  // Fetch owner's latest diagnostic report
+  const { data: diagnosticReport } = await supabase
+    .from("diagnostic_reports")
+    .select("*")
+    .eq("user_id", userId)
+    .order("generated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
   // Same aggregation as /api/analytics but for owner's data
   const { data: attempts } = await supabase
     .from("test_attempts")
@@ -43,7 +57,11 @@ export async function GET(
       history: [],
       topics: [],
     }
-    return NextResponse.json({ ...empty, ownerName: ownerProfile?.display_name ?? ownerProfile?.email })
+    return NextResponse.json({
+      ...empty,
+      ownerName: ownerProfile?.display_name ?? ownerProfile?.email,
+      diagnosticReport: diagnosticReport ?? null,
+    } satisfies SharedPayload)
   }
 
   const scores = attempts.map((a) => a.score_pct ?? 0)
@@ -98,5 +116,6 @@ export async function GET(
   return NextResponse.json({
     overview, history, topics,
     ownerName: ownerProfile?.display_name ?? ownerProfile?.email,
-  })
+    diagnosticReport: diagnosticReport ?? null,
+  } satisfies SharedPayload)
 }

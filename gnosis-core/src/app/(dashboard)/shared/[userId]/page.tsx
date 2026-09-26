@@ -5,14 +5,12 @@ import { useQuery } from "@tanstack/react-query"
 import { OverviewStats, OverviewStatsSkeleton } from "@/components/analytics/overview-stats"
 import { ScoreHistoryChart } from "@/components/analytics/score-history-chart"
 import { TopicAccuracyChart } from "@/components/analytics/topic-accuracy-chart"
+import { WeaknessCallout } from "@/components/analytics/weakness-callout"
+import { StaticDiagnosticReport } from "@/components/analytics/diagnostic-report"
 import { ArrowLeft } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import type { AnalyticsPayload } from "@/app/api/analytics/route"
-
-interface SharedPayload extends AnalyticsPayload {
-  ownerName: string
-}
+import type { SharedPayload } from "@/app/api/analytics/shared/[userId]/route"
 
 export default function SharedDashboardPage({ params }: { params: Promise<{ userId: string }> }) {
   const { userId } = use(params)
@@ -28,6 +26,11 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ user
       return res.json()
     },
   })
+
+  const scoreDelta =
+    data && data.history.length >= 2
+      ? data.history[data.history.length - 1].score - data.history[0].score
+      : undefined
 
   return (
     <div className="space-y-8">
@@ -55,11 +58,13 @@ export default function SharedDashboardPage({ params }: { params: Promise<{ user
         <OverviewStatsSkeleton />
       ) : data && data.overview.testsTaken > 0 ? (
         <>
-          <OverviewStats data={data.overview} />
+          <OverviewStats data={data.overview} scoreDelta={scoreDelta} />
+          {data.topics.length > 0 && <WeaknessCallout topics={data.topics} />}
           <div className="grid gap-6 xl:grid-cols-2">
             <ScoreHistoryChart data={data.history} />
             <TopicAccuracyChart data={data.topics} />
           </div>
+          <StaticDiagnosticReport report={data.diagnosticReport} />
         </>
       ) : data ? (
         <div className="rounded-xl border border-dashed border-border py-16 text-center text-sm text-muted-foreground">

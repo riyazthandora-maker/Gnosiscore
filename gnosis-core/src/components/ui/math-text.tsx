@@ -1,3 +1,5 @@
+"use client"
+
 import katex from "katex"
 
 type Segment =

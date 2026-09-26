@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Flag, ChevronLeft, ChevronRight, AlertTriangle, Loader2, Clock } from "lucide-react"
+import { MathText } from "@/components/ui/math-text"
 import { useExamSecurity } from "@/lib/hooks/use-exam-security"
 import type { ExamQuestion } from "@/types"
 import { cn } from "@/lib/utils"
@@ -243,7 +244,7 @@ export function ExamTaker({
       {/* Question card */}
       <div className="rounded-xl border border-border bg-card p-6 flex flex-col gap-5">
         <div className="flex items-start justify-between gap-3">
-          <p className="text-base font-medium leading-relaxed">{currentQuestion.body}</p>
+          <MathText className="text-base font-medium leading-relaxed">{currentQuestion.body}</MathText>
           {flagForReview && (
             <button
               onClick={() => toggleFlag(currentQuestion.id)}
@@ -281,7 +282,7 @@ export function ExamTaker({
                 )}>
                   {key}
                 </span>
-                {text}
+                <MathText>{text}</MathText>
               </button>
             )
           })}

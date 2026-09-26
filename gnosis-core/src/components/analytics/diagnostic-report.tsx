@@ -96,6 +96,25 @@ function ReportContent({ report }: { report: DiagnosticReportType }) {
   )
 }
 
+export function StaticDiagnosticReport({ report }: { report: DiagnosticReportType | null }) {
+  return (
+    <section className="rounded-xl border border-border bg-card p-5 space-y-4">
+      <div className="flex items-center gap-2">
+        <BrainCircuit className="size-5 text-primary" />
+        <h2 className="font-semibold">Learning Snapshot</h2>
+      </div>
+      {report ? (
+        <ReportContent report={report} />
+      ) : (
+        <div className="flex flex-col items-center gap-3 py-8 text-center">
+          <BrainCircuit className="size-10 text-muted-foreground/40" />
+          <p className="text-sm text-muted-foreground">No learning snapshot available yet.</p>
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function DiagnosticReport({ hasEnoughData }: { hasEnoughData: boolean }) {
   const { data: diagnosticData, isLoading: reportLoading } = useDiagnostic()
   const { mutate: generate, isPending, error } = useGenerateDiagnostic()

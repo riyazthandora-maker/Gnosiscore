@@ -2,6 +2,7 @@
 
 import { CheckCircle2, XCircle, Trophy } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MathText } from "@/components/ui/math-text"
 import type { ExamQuestion } from "@/types"
 
 interface ExamResultsProps {
@@ -79,7 +80,7 @@ export function ExamResults({
                     ? <CheckCircle2 className="size-4 text-emerald-600 shrink-0 mt-0.5" />
                     : <XCircle className="size-4 text-destructive shrink-0 mt-0.5" />
                   }
-                  <p className="text-sm font-medium">{i + 1}. {q.body}</p>
+                  <p className="text-sm font-medium">{i + 1}. <MathText>{q.body}</MathText></p>
                 </div>
                 <div className="flex flex-col gap-1 pl-6">
                   {(["A", "B", "C", "D"] as const).map(key => (
@@ -92,12 +93,12 @@ export function ExamResults({
                         "text-muted-foreground"
                       )}
                     >
-                      {key}. {q.options[key]}
+                      {key}. <MathText>{q.options[key]}</MathText>
                     </p>
                   ))}
                 </div>
                 {q.explanation && (
-                  <p className="text-xs text-muted-foreground pl-6 border-t border-border/50 pt-2 mt-1">{q.explanation}</p>
+                  <p className="text-xs text-muted-foreground pl-6 border-t border-border/50 pt-2 mt-1"><MathText>{q.explanation}</MathText></p>
                 )}
               </div>
             )

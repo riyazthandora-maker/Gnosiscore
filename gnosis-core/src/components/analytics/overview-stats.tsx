@@ -2,6 +2,7 @@
 
 import { BookOpen, CheckCircle2, Clock, Target, TrendingUp, Trophy } from "lucide-react"
 import { motion } from "framer-motion"
+import { cn } from "@/lib/utils"
 import type { OverviewStats } from "@/app/api/analytics/route"
 
 function formatTime(secs: number) {
@@ -20,7 +21,7 @@ const STATS = (o: OverviewStats) => [
   { label: "Study time", value: formatTime(o.totalTimeSecs), icon: Clock, color: "text-rose-500" },
 ]
 
-export function OverviewStats({ data }: { data: OverviewStats }) {
+export function OverviewStats({ data, scoreDelta }: { data: OverviewStats; scoreDelta?: number }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {STATS(data).map(({ label, value, icon: Icon, color }, i) => (
@@ -36,7 +37,20 @@ export function OverviewStats({ data }: { data: OverviewStats }) {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">{label}</p>
-            <p className="text-2xl font-bold tabular-nums">{value}</p>
+            <div className="flex items-baseline gap-2">
+              <p className="text-2xl font-bold tabular-nums">{value}</p>
+              {label === "Avg. score" && scoreDelta !== undefined && scoreDelta !== 0 && (
+                <span className={cn(
+                  "text-xs font-semibold tabular-nums",
+                  scoreDelta > 0 ? "text-green-600 dark:text-green-400" : "text-destructive"
+                )}>
+                  {scoreDelta > 0 ? `+${scoreDelta}` : scoreDelta} pts
+                </span>
+              )}
+            </div>
+            {label === "Avg. score" && scoreDelta !== undefined && scoreDelta !== 0 && (
+              <p className="text-[10px] text-muted-foreground/70">since first test</p>
+            )}
           </div>
         </motion.div>
       ))}

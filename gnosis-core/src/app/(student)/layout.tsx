@@ -15,6 +15,9 @@ export default async function StudentLayout({ children }: { children: React.Reac
       <header className="border-b border-border bg-background px-6 py-3 flex items-center justify-between">
         <span className="font-bold text-primary">GnosisCore</span>
         <div className="flex items-center gap-4">
+          <Link href="/student/progress" className="text-sm text-muted-foreground hover:text-foreground">
+            My Progress
+          </Link>
           <Link href="/student/pacing" className="text-sm text-muted-foreground hover:text-foreground">
             My Schedule
           </Link>

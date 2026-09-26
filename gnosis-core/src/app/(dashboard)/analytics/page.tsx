@@ -3,8 +3,9 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import Link from "next/link"
-import { BarChart3, Users, ChevronUp, ChevronDown, Brain } from "lucide-react"
+import { BarChart3, Users, GraduationCap, ChevronUp, ChevronDown, Brain, ChevronRight } from "lucide-react"
 import { cn } from "@/lib/utils"
+import type { GradeRow } from "@/app/api/educator/analytics/grades/route"
 
 interface TestRow {
   id: string
@@ -218,7 +219,137 @@ function StudentsTab() {
   )
 }
 
-type Tab = "tests" | "students"
+function GradesTab() {
+  const { data, isLoading } = useQuery<{ grades: GradeRow[] }>({
+    queryKey: ["educator-analytics-grades"],
+    queryFn: () => fetch("/api/educator/analytics/grades").then((r) => r.json()),
+  })
+
+  const { sorted, sortKey, sortDir, toggleSort } = useSort(data?.grades ?? [], "name")
+  const [expandedGrade, setExpandedGrade] = useState<string | null>(null)
+
+  const { data: studentsData } = useQuery<{ students: StudentRow[] }>({
+    queryKey: ["educator-analytics-students"],
+    queryFn: () => fetch("/api/educator/analytics/students").then((r) => r.json()),
+    enabled: expandedGrade !== null,
+  })
+
+  if (isLoading) return <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="h-12 animate-pulse rounded-xl bg-muted" />)}</div>
+
+  if (!data?.grades.length) return (
+    <div className="py-16 text-center text-sm text-muted-foreground">
+      No grades found. Add students with a grade to see grade-level analytics.
+    </div>
+  )
+
+  const cols: { label: string; key: string }[] = [
+    { label: "Grade", key: "name" },
+    { label: "Students", key: "student_count" },
+    { label: "Assigned", key: "assigned" },
+    { label: "Completed", key: "completed" },
+    { label: "Avg Score", key: "avg_score" },
+  ]
+
+  return (
+    <div className="space-y-2">
+      <div className="overflow-x-auto rounded-xl border border-border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-muted/30">
+              {cols.map(({ label, key }) => (
+                <th key={key} className="px-4 py-3 text-left">
+                  <SortButton label={label} sortKey={key} current={sortKey} dir={sortDir} onSort={toggleSort} />
+                </th>
+              ))}
+              <th className="px-4 py-3" />
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((grade) => {
+              const isExpanded = expandedGrade === grade.id
+              const gradeStudents = studentsData?.students ?? []
+
+              return (
+                <>
+                  <tr
+                    key={grade.id}
+                    className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors cursor-pointer"
+                    onClick={() => setExpandedGrade(isExpanded ? null : grade.id)}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <GraduationCap className="size-4 text-primary/70 shrink-0" />
+                        <span className="font-medium">{grade.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 tabular-nums">{grade.student_count}</td>
+                    <td className="px-4 py-3 tabular-nums">{grade.assigned}</td>
+                    <td className="px-4 py-3 tabular-nums">
+                      {grade.completed}
+                      {grade.assigned > 0 && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          ({Math.round((grade.completed / grade.assigned) * 100)}%)
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3"><ScoreBadge pct={grade.avg_score} /></td>
+                    <td className="px-4 py-3">
+                      <ChevronRight className={cn(
+                        "size-4 text-muted-foreground transition-transform",
+                        isExpanded && "rotate-90"
+                      )} />
+                    </td>
+                  </tr>
+
+                  {isExpanded && (
+                    <tr key={`${grade.id}-expanded`} className="border-b border-border bg-muted/10">
+                      <td colSpan={6} className="px-4 py-3">
+                        {gradeStudents.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2">Loading students…</p>
+                        ) : (
+                          <div className="space-y-1">
+                            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">
+                              Students in {grade.name}
+                            </p>
+                            <div className="grid gap-1.5 sm:grid-cols-2">
+                              {gradeStudents.map((s) => (
+                                <div
+                                  key={s.id}
+                                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2"
+                                >
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-medium truncate">{s.full_name}</p>
+                                    <p className="text-[10px] text-muted-foreground truncate">{s.email}</p>
+                                  </div>
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <ScoreBadge pct={s.avg_score} />
+                                    <Link
+                                      href={`/analytics/students/${s.id}`}
+                                      className="text-[10px] text-primary hover:underline"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      Insights
+                                    </Link>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+type Tab = "tests" | "students" | "grades"
 
 export default function AnalyticsPage() {
   const [tab, setTab] = useState<Tab>("tests")
@@ -226,6 +357,7 @@ export default function AnalyticsPage() {
   const TABS: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: "tests", label: "Tests", icon: BarChart3 },
     { key: "students", label: "Students", icon: Users },
+    { key: "grades", label: "Grades", icon: GraduationCap },
   ]
 
   return (
@@ -254,7 +386,7 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {tab === "tests" ? <TestsTab /> : <StudentsTab />}
+      {tab === "tests" ? <TestsTab /> : tab === "students" ? <StudentsTab /> : <GradesTab />}
     </div>
   )
 }

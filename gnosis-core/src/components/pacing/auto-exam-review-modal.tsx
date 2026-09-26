@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { Check, ChevronDown, RefreshCw, X } from "lucide-react"
+import { MathText } from "@/components/ui/math-text"
 import { cn } from "@/lib/utils"
 import type { ExamQuestion } from "@/types"
 
@@ -109,7 +110,7 @@ export function AutoExamReviewModal({
                 <span className="shrink-0 text-[11px] font-bold text-muted-foreground pt-0.5 w-5 text-center">
                   {i + 1}
                 </span>
-                <span className="flex-1 text-sm leading-snug">{q.body}</span>
+                <MathText className="flex-1 text-sm leading-snug">{q.body}</MathText>
                 <ChevronDown className={cn(
                   "size-4 shrink-0 text-muted-foreground transition-transform mt-0.5",
                   expandedIdx === i && "rotate-180"
@@ -135,7 +136,7 @@ export function AutoExamReviewModal({
                       )}>
                         {label}
                       </span>
-                      <span className="flex-1 leading-snug">{q.options[label]}</span>
+                      <MathText className="flex-1 leading-snug">{q.options[label]}</MathText>
                       {q.correct === label && (
                         <Check className="size-3.5 shrink-0 text-green-600 mt-0.5" />
                       )}
@@ -145,7 +146,7 @@ export function AutoExamReviewModal({
                   {q.explanation && (
                     <div className="mt-1 rounded-lg bg-blue-50 border border-blue-100 px-3 py-2 text-xs text-blue-800 leading-relaxed">
                       <span className="font-semibold">Explanation: </span>
-                      {q.explanation}
+                      <MathText>{q.explanation}</MathText>
                     </div>
                   )}
                 </div>
