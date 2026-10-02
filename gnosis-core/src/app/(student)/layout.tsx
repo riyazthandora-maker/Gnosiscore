@@ -10,6 +10,17 @@ export default async function StudentLayout({ children }: { children: React.Reac
   const role = user.user_metadata?.role
   if (role !== "student") redirect("/login")
 
+  const { data: profile } = await supabase
+    .from("users")
+    .select("account_status")
+    .eq("id", user.id)
+    .single()
+
+  // A student on hold has not been linked to an educator yet — no roster row, no
+  // assignments. Show the "we'll contact you" screen rather than an empty area.
+  // A missing profile row (trigger failed) is let through rather than deadlocked.
+  if (profile && profile.account_status !== "approved") redirect("/pending-approval")
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="border-b border-border bg-background px-6 py-3 flex items-center justify-between">

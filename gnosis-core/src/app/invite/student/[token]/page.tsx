@@ -136,7 +136,7 @@ export default function StudentInvitePage() {
                   <Button
                     className="w-full"
                     onClick={() => router.push(
-                      `/auth/register?inviteToken=${token}&email=${encodeURIComponent(state.invite.studentEmail)}`
+                      `/register?inviteToken=${token}&email=${encodeURIComponent(state.invite.studentEmail)}`
                     )}
                   >
                     Create Account & Join
@@ -145,7 +145,7 @@ export default function StudentInvitePage() {
                     variant="outline"
                     className="w-full"
                     onClick={() => router.push(
-                      `/auth/login?redirect=${encodeURIComponent(`/invite/student/${token}`)}`
+                      `/login?redirectTo=${encodeURIComponent(`/invite/student/${token}`)}`
                     )}
                   >
                     Log in to Join
@@ -165,7 +165,7 @@ export default function StudentInvitePage() {
                     variant="outline"
                     className="w-full"
                     onClick={() => router.push(
-                      `/auth/login?redirect=${encodeURIComponent(`/invite/student/${token}`)}`
+                      `/login?redirectTo=${encodeURIComponent(`/invite/student/${token}`)}`
                     )}
                   >
                     Switch Account

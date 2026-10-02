@@ -2,7 +2,10 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 import type { UserRole } from "@/types"
 
-const PUBLIC_ROUTES = ["/", "/login", "/register", "/logout", "/forgot-password", "/pending-approval", "/auth"]
+// "/invite" is public by design: a student who has not signed up yet must be
+// able to open their invite link, then create an account from it. The token in
+// the URL is the secret.
+const PUBLIC_ROUTES = ["/", "/login", "/register", "/logout", "/forgot-password", "/pending-approval", "/auth", "/invite"]
 
 const ROLE_ROUTES: Record<UserRole, string[]> = {
   admin:           ["/admin"],
@@ -90,5 +93,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|bmp|woff|woff2|ttf|otf|eot|json|txt|xml)$).*)",
+  ],
 }

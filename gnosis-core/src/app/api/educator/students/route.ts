@@ -138,6 +138,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: insertErr.message }, { status: 500 })
     }
 
+    // The student is now in this educator's roster — lift any registration hold.
+    await adminDb
+      .from("users")
+      .update({ account_status: "approved" })
+      .eq("id", existingUser.id)
+      .eq("account_status", "hold")
+
     return NextResponse.json({ student: entry, linked: true }, { status: 201 })
   }
 

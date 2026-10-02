@@ -629,7 +629,7 @@ export default function RegistrationsPage() {
                     </div>
                     <p className="text-sm text-muted-foreground">{u.email}</p>
                     <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                      <span>WhatsApp: {u.whatsapp}</span>
+                      <span>Contact: {u.whatsapp}</span>
                       <span>Registered: {formatDate(u.created_at)}</span>
                       {u.approved_at && <span>Reviewed: {formatDate(u.approved_at)}</span>}
                     </div>

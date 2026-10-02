@@ -66,5 +66,13 @@ export async function POST(
     })
     .eq("id", entry.id)
 
+  // Now linked to an educator — a held student can enter the student area.
+  // Guarded on 'hold' so a rejected/deactivated account is never resurrected.
+  await adminDb
+    .from("users")
+    .update({ account_status: "approved" })
+    .eq("id", user.id)
+    .eq("account_status", "hold")
+
   return NextResponse.json({ success: true })
 }

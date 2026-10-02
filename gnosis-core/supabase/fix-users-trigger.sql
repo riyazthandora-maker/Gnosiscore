@@ -24,15 +24,18 @@ BEGIN
   );
   v_status := CASE
     WHEN v_role = 'educator_parent' THEN 'pending'::account_status
+    WHEN v_role = 'student'         THEN 'hold'::account_status
     ELSE 'approved'::account_status
   END;
 
-  INSERT INTO public.users (id, email, full_name, whatsapp, role, account_status)
+  INSERT INTO public.users (id, email, full_name, whatsapp, grade, subjects, role, account_status)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'whatsapp', ''),
+    COALESCE(NEW.raw_user_meta_data->>'grade', ''),
+    COALESCE(NEW.raw_user_meta_data->>'subjects', ''),
     v_role,
     v_status
   )
@@ -47,16 +50,23 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ── 2. Backfill existing auth users that have no profile row ───────────────
-INSERT INTO public.users (id, email, full_name, whatsapp, role, account_status)
+-- WARNING: students backfilled here land in 'hold' and cannot use the student
+-- area until an educator links them. Only run if these users really are
+-- unlinked; otherwise approve them explicitly afterwards.
+INSERT INTO public.users (id, email, full_name, whatsapp, grade, subjects, role, account_status)
 SELECT
   u.id,
   u.email,
   COALESCE(u.raw_user_meta_data->>'full_name', ''),
   COALESCE(u.raw_user_meta_data->>'whatsapp', ''),
+  COALESCE(u.raw_user_meta_data->>'grade', ''),
+  COALESCE(u.raw_user_meta_data->>'subjects', ''),
   COALESCE((u.raw_user_meta_data->>'role')::user_role, 'student'::user_role),
   CASE
     WHEN COALESCE(u.raw_user_meta_data->>'role', 'student') = 'educator_parent'
       THEN 'pending'::account_status
+    WHEN COALESCE(u.raw_user_meta_data->>'role', 'student') = 'student'
+      THEN 'hold'::account_status
     ELSE 'approved'::account_status
   END
 FROM auth.users u

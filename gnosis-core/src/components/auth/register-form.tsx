@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/lib/supabase/client"
 import type { UserRole } from "@/types"
@@ -15,17 +15,24 @@ interface FormData {
   password: string
   confirm_password: string
   role: UserRole
+  contact: string
+  grade: string
+  subjects: string
 }
 
 export function RegisterForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [step, setStep] = useState<Step>("form")
   const [form, setForm] = useState<FormData>({
     full_name: "",
-    email: "",
+    email: searchParams.get("email") ?? "",
     password: "",
     confirm_password: "",
     role: "student",
+    contact: "",
+    grade: "",
+    subjects: "",
   })
   const [otp, setOtp] = useState("")
   const [otpToken, setOtpToken] = useState("")
@@ -89,6 +96,9 @@ export function RegisterForm() {
         password: form.password,
         full_name: form.full_name,
         role: form.role,
+        contact: form.contact,
+        grade: form.grade,
+        subjects: form.subjects,
         ...(otpCode ? { otpCode, otpToken: otpVerifyToken } : {}),
       }),
     })
@@ -111,7 +121,9 @@ export function RegisterForm() {
     }
 
     const role = (signInData.user?.user_metadata?.role ?? "student") as UserRole
-    if (role === "educator_parent") {
+    // A student with no educator linked to their email waits on the hold screen
+    // instead of landing on an empty student area nobody has been assigned to.
+    if (regData.held || role === "educator_parent") {
       router.push("/pending-approval")
     } else {
       router.push(roleHomePath(role))
@@ -238,6 +250,52 @@ export function RegisterForm() {
           </p>
         )}
       </div>
+
+      {form.role === "student" && (
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <label htmlFor="grade" className="text-sm font-medium">Grade / year</label>
+            <input
+              id="grade"
+              type="text"
+              required
+              value={form.grade}
+              onChange={(e) => update("grade", e.target.value)}
+              placeholder="e.g. Year 10 / Grade 9"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="subjects" className="text-sm font-medium">Subjects you want support with</label>
+            <input
+              id="subjects"
+              type="text"
+              required
+              value={form.subjects}
+              onChange={(e) => update("subjects", e.target.value)}
+              placeholder="e.g. Maths, Physics, Chemistry"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="contact" className="text-sm font-medium">
+              Contact number <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <input
+              id="contact"
+              type="tel"
+              value={form.contact}
+              onChange={(e) => update("contact", e.target.value)}
+              placeholder="+971 50 123 4567"
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            This helps us match you with the right teacher. If you have an invite link from your school, open it to join straight away.
+          </p>
+        </div>
+      )}
+
       {error && <p className="text-sm text-destructive">{error}</p>}
       <Button type="submit" className="w-full" disabled={loading}>
         {loading

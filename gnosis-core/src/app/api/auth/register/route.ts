@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Too many attempts. Please wait." }, { status: 429 })
   }
 
-  const { email, password, full_name, role, otpCode, otpToken } = await request.json()
+  const { email, password, full_name, role, otpCode, otpToken, contact, grade, subjects } = await request.json()
   if (!email?.trim() || !role?.trim()) {
     return NextResponse.json({ error: "Email and role required." }, { status: 400 })
   }
@@ -42,7 +42,27 @@ export async function POST(request: Request) {
   }
 
   const supabase = createAdminClient()
-  const userMeta = { full_name, role }
+  const isStudent = role === "student"
+
+  // Only students carry the extra contact/grade/subjects fields. They land in
+  // user_metadata so the on_auth_user_created trigger can mirror them; the
+  // ensureProfileRow upsert below covers the trigger-absent path.
+  const studentFields = {
+    whatsapp: isStudent ? asText(contact) : "",
+    grade: isStudent ? asText(grade) : "",
+    subjects: isStudent ? asText(subjects) : "",
+  }
+  const userMeta = {
+    full_name,
+    role,
+    ...(isStudent
+      ? {
+          whatsapp: studentFields.whatsapp,
+          grade: studentFields.grade,
+          subjects: studentFields.subjects,
+        }
+      : {}),
+  }
 
   if (IS_DEV) {
     const { data: created, error: createErr } = await supabase.auth.admin.createUser({
@@ -96,7 +116,7 @@ export async function POST(request: Request) {
     }
 
     if (!createErr && created?.user) {
-      await ensureProfileRow(supabase, created.user.id, email.trim(), full_name, role)
+      await ensureProfileRow(supabase, created.user.id, email.trim(), full_name, role, studentFields)
     }
 
     if (!createErr && role === "educator_parent") {
@@ -110,14 +130,16 @@ export async function POST(request: Request) {
       }
     }
 
-    // Auto-link any pending roster invites for this student email
+    // Auto-link any pending roster invites for this student email. Awaited —
+    // the client signs in immediately after this response and would otherwise
+    // reach the student area before the link (and promotion) landed.
     if (!createErr && role === "student") {
-      autoLinkRosterInvites(supabase, email.trim().toLowerCase()).catch(
+      await autoLinkRosterInvites(supabase, email.trim().toLowerCase()).catch(
         (err: unknown) => console.error("[register] roster auto-link failed:", (err as Error)?.message)
       )
     }
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, held: await isHeldStudent(supabase, isStudent, email) })
   }
 
   // Production — create confirmed user with their chosen password (no SMTP needed)
@@ -170,7 +192,7 @@ export async function POST(request: Request) {
   }
 
   if (!createErr && created?.user) {
-    await ensureProfileRow(supabase, created.user.id, email.trim(), full_name, role)
+    await ensureProfileRow(supabase, created.user.id, email.trim(), full_name, role, studentFields)
   }
 
   if (!createErr && role === "educator_parent") {
@@ -184,14 +206,37 @@ export async function POST(request: Request) {
     }
   }
 
-  // Auto-link any pending roster invites for this student email
+  // Auto-link any pending roster invites for this student email. Awaited —
+  // the client signs in immediately after this response and would otherwise
+  // reach the student area before the link (and promotion) landed.
   if (!createErr && role === "student") {
-    autoLinkRosterInvites(supabase, email.trim().toLowerCase()).catch(
+    await autoLinkRosterInvites(supabase, email.trim().toLowerCase()).catch(
       (err: unknown) => console.error("[register] roster auto-link failed:", (err as Error)?.message)
     )
   }
 
-  return NextResponse.json({ success: true })
+  return NextResponse.json({ success: true, held: await isHeldStudent(supabase, isStudent, email) })
+}
+
+function asText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : ""
+}
+
+// Whether the freshly-registered student is still parked in 'hold' (no educator
+// linked their email). Read from the DB rather than inferred, so a re-register
+// by an already-linked student is not misreported as held.
+async function isHeldStudent(
+  adminDb: ReturnType<typeof createAdminClient>,
+  isStudent: boolean,
+  email: string
+): Promise<boolean> {
+  if (!isStudent) return false
+  const { data } = await adminDb
+    .from("users")
+    .select("account_status")
+    .eq("email", email.trim())
+    .single()
+  return data?.account_status === "hold"
 }
 
 async function autoLinkRosterInvites(
@@ -225,6 +270,14 @@ async function autoLinkRosterInvites(
       })
       .eq("id", entry.id)
   }
+
+  // A linked student is no longer on hold. Guarded on 'hold' so we never
+  // resurrect a rejected or deactivated account.
+  await adminDb
+    .from("users")
+    .update({ account_status: "approved" })
+    .eq("id", newUser.id)
+    .eq("account_status", "hold")
 }
 
 // Defensive: the on_auth_user_created trigger normally creates this row, but it
@@ -235,7 +288,8 @@ async function ensureProfileRow(
   userId: string,
   email: string,
   fullName: string | undefined,
-  role: string
+  role: string,
+  fields: { whatsapp: string; grade: string; subjects: string }
 ): Promise<void> {
   const { error } = await adminDb
     .from("users")
@@ -244,8 +298,12 @@ async function ensureProfileRow(
         id: userId,
         email,
         full_name: fullName ?? "",
+        whatsapp: fields.whatsapp,
+        grade: fields.grade,
+        subjects: fields.subjects,
         role,
-        account_status: role === "educator_parent" ? "pending" : "approved",
+        account_status:
+          role === "educator_parent" ? "pending" : role === "student" ? "hold" : "approved",
       },
       { onConflict: "id", ignoreDuplicates: true }
     )

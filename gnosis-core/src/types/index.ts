@@ -30,7 +30,7 @@ export interface ExamPaper {
 }
 
 export type UserRole = 'admin' | 'educator_parent' | 'student'
-export type AccountStatus = 'pending' | 'approved' | 'rejected'
+export type AccountStatus = 'pending' | 'approved' | 'rejected' | 'hold'
 export type GenerationStatus = 'pending_admin' | 'approved' | 'rejected' | 'completed'
 export type QuestionStatus = 'pending_review' | 'approved' | 'rejected'
 export type Difficulty = 'easy' | 'medium' | 'hard'
@@ -40,11 +40,27 @@ export interface User {
   email: string
   full_name: string
   whatsapp: string
+  grade: string
+  subjects: string
   role: UserRole
   account_status: AccountStatus
   approved_by: string | null
   approved_at: string | null
   created_at: string
+}
+
+export interface AdminStudentRow {
+  id: string
+  email: string
+  full_name: string
+  whatsapp: string
+  grade: string
+  subjects: string
+  account_status: AccountStatus
+  is_active: boolean
+  created_at: string
+  linked: boolean
+  educator_names: string[]
 }
 
 export interface QuestionOption {

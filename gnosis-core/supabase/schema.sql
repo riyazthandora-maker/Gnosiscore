@@ -11,8 +11,9 @@ CREATE EXTENSION IF NOT EXISTS "vector";
 DO $$ BEGIN CREATE TYPE user_role AS ENUM ('admin', 'educator_parent', 'student');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-DO $$ BEGIN CREATE TYPE account_status AS ENUM ('pending', 'approved', 'rejected');
+DO $$ BEGIN CREATE TYPE account_status AS ENUM ('pending', 'approved', 'rejected', 'hold');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+ALTER TYPE account_status ADD VALUE IF NOT EXISTS 'hold';
 
 DO $$ BEGIN CREATE TYPE generation_status AS ENUM ('pending_admin', 'approved', 'rejected', 'completed');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -26,6 +27,8 @@ CREATE TABLE IF NOT EXISTS public.users (
   email          TEXT UNIQUE NOT NULL,
   full_name      TEXT NOT NULL DEFAULT '',
   whatsapp       TEXT NOT NULL DEFAULT '',
+  grade          TEXT NOT NULL DEFAULT '',
+  subjects       TEXT NOT NULL DEFAULT '',
   role           user_role NOT NULL DEFAULT 'student',
   account_status account_status NOT NULL DEFAULT 'approved',
   approved_by    UUID REFERENCES public.users(id),
@@ -38,8 +41,10 @@ CREATE TABLE IF NOT EXISTS public.users (
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS token_cap   INTEGER;
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS tokens_used INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS is_active   BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS grade       TEXT NOT NULL DEFAULT '';
+ALTER TABLE IF EXISTS public.users ADD COLUMN IF NOT EXISTS subjects    TEXT NOT NULL DEFAULT '';
 
--- Auto-create profile row; educator_parent accounts start as pending
+-- Auto-create profile row; educators start pending, students start on hold
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
@@ -52,15 +57,18 @@ BEGIN
   );
   v_status := CASE
     WHEN v_role = 'educator_parent' THEN 'pending'::account_status
+    WHEN v_role = 'student'         THEN 'hold'::account_status
     ELSE 'approved'::account_status
   END;
 
-  INSERT INTO public.users (id, email, full_name, whatsapp, role, account_status)
+  INSERT INTO public.users (id, email, full_name, whatsapp, grade, subjects, role, account_status)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
     COALESCE(NEW.raw_user_meta_data->>'whatsapp', ''),
+    COALESCE(NEW.raw_user_meta_data->>'grade', ''),
+    COALESCE(NEW.raw_user_meta_data->>'subjects', ''),
     v_role,
     v_status
   )
