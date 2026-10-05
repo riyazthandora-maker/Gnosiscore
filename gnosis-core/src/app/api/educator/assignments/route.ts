@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { sendTestAssignmentEmail } from "@/lib/email/send-test-assignment"
+import { notify } from "@/lib/notifications/notify"
 
 // GET  /api/educator/assignments?paper_id=...
 export async function GET(req: Request) {
@@ -71,10 +72,10 @@ export async function POST(req: Request) {
     .single()
   const teacherName = (profile as { full_name?: string } | null)?.full_name ?? "Your teacher"
 
-  // Fetch student roster entries for emails
+  // Fetch student roster entries for notifications + emails
   const { data: rosterEntries } = await supabase
     .from("student_roster")
-    .select("id, name, email")
+    .select("id, name, email, student_user_id")
     .in("id", student_roster_ids)
 
   // Fetch paper titles for emails
@@ -86,11 +87,24 @@ export async function POST(req: Request) {
   const paperMap = Object.fromEntries((papers ?? []).map(p => [p.id as string, p.title as string]))
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
 
-  // Fire-and-forget emails
+  // Send in-app notifications + emails
   if (rosterEntries && inserted) {
     for (const assignment of inserted) {
       const student = rosterEntries.find(r => r.id === assignment.student_roster_id)
       const paperTitle = paperMap[assignment.paper_id as string] ?? "a test"
+
+      if (student?.student_user_id) {
+        notify({
+          userId: student.student_user_id as string,
+          type: "exam_assigned",
+          payload: {
+            assignment_id: assignment.id,
+            paper_id: assignment.paper_id,
+            paper_title: paperTitle,
+          },
+        }).catch((err) => console.error("[assignments] notify failed:", err))
+      }
+
       if (student?.email) {
         sendTestAssignmentEmail({
           studentEmail: student.email as string,
@@ -98,7 +112,7 @@ export async function POST(req: Request) {
           teacherName,
           examTitle: paperTitle,
           lobbyUrl: `${appUrl}/student/exam/${assignment.id}`,
-        }).catch(() => { /* non-critical */ })
+        }).catch((err) => console.error("[assignments] email failed for", student.email, err))
       }
     }
   }

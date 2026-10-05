@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   const admin = createAdminClient()
 
   const { data: pending, error: rpcError } = await admin
-    .rpc("get_pending_auto_assess_milestones", { p_days_ahead: 5 })
+    .rpc("get_pending_auto_assess_milestones", { p_days_ahead: 6 })
 
   if (rpcError) {
     console.error("[auto-assess cron] RPC error:", rpcError.message)

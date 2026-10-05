@@ -565,7 +565,7 @@ export function PlanDetailClient({ plan, initialMilestones }: {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium">Auto-Assess</p>
-              <p className="text-xs text-muted-foreground">Generate chapter checks automatically 5 days before each Assess slot</p>
+              <p className="text-xs text-muted-foreground">Generate chapter checks automatically in the same week as each Assess slot</p>
             </div>
             <button
               type="button"

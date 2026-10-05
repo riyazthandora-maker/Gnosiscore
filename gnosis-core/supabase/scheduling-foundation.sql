@@ -99,11 +99,12 @@ CREATE INDEX IF NOT EXISTS idx_pacing_suggestions_plan_status
   ON public.pacing_suggestions(plan_id, status);
 
 -- ── RPC: get milestones pending auto-exam generation ──────────
--- Returns assess-type milestones whose slot starts within
--- p_days_ahead days and haven't been auto-generated yet.
+-- Returns assess-type milestones whose slot falls within the
+-- current week (slot_date BETWEEN NOW AND NOW+6 covers exactly
+-- one 7-day week for slots ending on days 7/14/21/28).
 -- Called by the auto-assess cron with service-role key.
 CREATE OR REPLACE FUNCTION public.get_pending_auto_assess_milestones(
-  p_days_ahead INTEGER DEFAULT 5
+  p_days_ahead INTEGER DEFAULT 6
 )
 RETURNS TABLE (
   milestone_id          UUID,
