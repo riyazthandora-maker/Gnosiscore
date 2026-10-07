@@ -1,11 +1,11 @@
 "use client"
 
-import { use } from "react"
+import { use, useState } from "react"
 import { useRouter } from "next/navigation"
 import { useQuery } from "@tanstack/react-query"
 import {
   ChevronLeft, Loader2, Brain, TrendingUp, TrendingDown,
-  Minus, CheckCircle2, AlertCircle, Target,
+  Minus, CheckCircle2, AlertCircle, Target, Printer, Mail, Check,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -66,6 +66,7 @@ function ScoreBar({ pct, classAvg }: { pct: number; classAvg?: number }) {
 export default function StudentInsightsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: studentId } = use(params)
   const router = useRouter()
+  const [shareState, setShareState] = useState<"idle" | "sending" | "sent" | "error">("idle")
 
   const { data, isLoading, isError } = useQuery<InsightsData>({
     queryKey: ["student-insights", studentId],
@@ -96,6 +97,23 @@ export default function StudentInsightsPage({ params }: { params: Promise<{ id: 
   }
 
   const { student, exam_history, class_averages, topic_accuracy, score_trend, ai_advisory } = data
+
+  async function handleShare() {
+    setShareState("sending")
+    try {
+      const res = await fetch(`/api/educator/students/${studentId}/share-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ insights: { exam_history, topic_accuracy, score_trend, ai_advisory } }),
+      })
+      if (!res.ok) throw new Error("failed")
+      setShareState("sent")
+      setTimeout(() => setShareState("idle"), 4000)
+    } catch {
+      setShareState("error")
+      setTimeout(() => setShareState("idle"), 4000)
+    }
+  }
   const avgScore = exam_history.length
     ? Math.round(exam_history.reduce((s, e) => s + e.pct, 0) / exam_history.length)
     : null
@@ -119,9 +137,19 @@ export default function StudentInsightsPage({ params }: { params: Promise<{ id: 
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
+      {/* Print styles — hide chrome, show clean report */}
+      <style>{`
+        @media print {
+          aside, header { display: none !important; }
+          .no-print { display: none !important; }
+          body { background: white; }
+          @page { margin: 1.5cm; }
+        }
+      `}</style>
+
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={() => router.back()} className="text-muted-foreground hover:text-foreground transition-colors">
+      <div className="flex items-start gap-3">
+        <button onClick={() => router.back()} className="no-print mt-1 text-muted-foreground hover:text-foreground transition-colors shrink-0">
           <ChevronLeft className="size-5" />
         </button>
         <div className="flex-1 min-w-0">
@@ -130,6 +158,38 @@ export default function StudentInsightsPage({ params }: { params: Promise<{ id: 
             <h1 className="text-2xl font-bold tracking-tight truncate">{student.full_name}</h1>
           </div>
           <p className="text-sm text-muted-foreground">{student.email}</p>
+        </div>
+        {/* Action buttons */}
+        <div className="no-print flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <Printer className="size-3.5" />
+            Download PDF
+          </button>
+          <button
+            onClick={handleShare}
+            disabled={shareState === "sending" || shareState === "sent"}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
+              shareState === "sent"
+                ? "bg-green-500/10 text-green-700 border border-green-300 cursor-default"
+                : shareState === "error"
+                ? "bg-destructive/10 text-destructive border border-destructive/30"
+                : "bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+            )}
+          >
+            {shareState === "sending" ? (
+              <><Loader2 className="size-3.5 animate-spin" /> Sending…</>
+            ) : shareState === "sent" ? (
+              <><Check className="size-3.5" /> Sent!</>
+            ) : shareState === "error" ? (
+              <>Failed — retry</>
+            ) : (
+              <><Mail className="size-3.5" /> Share by Email</>
+            )}
+          </button>
         </div>
       </div>
 
