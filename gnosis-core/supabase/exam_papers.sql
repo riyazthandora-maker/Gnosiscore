@@ -27,3 +27,7 @@ CREATE POLICY "exam_papers_owner" ON public.exam_papers
 
 CREATE INDEX idx_exam_papers_teacher
   ON public.exam_papers (teacher_id, created_at DESC);
+
+GRANT SELECT ON public.exam_papers TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.exam_papers TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.exam_papers TO service_role;

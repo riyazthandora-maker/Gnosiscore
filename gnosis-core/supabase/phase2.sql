@@ -54,3 +54,7 @@ CREATE OR REPLACE FUNCTION public.reset_all_educator_tokens()
 RETURNS VOID LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $$
   UPDATE public.users SET tokens_used = 0 WHERE role = 'educator_parent';
 $$;
+
+GRANT SELECT ON public.platform_settings TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.platform_settings TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.platform_settings TO service_role;

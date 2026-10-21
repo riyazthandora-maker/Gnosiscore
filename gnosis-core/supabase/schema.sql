@@ -345,3 +345,34 @@ DROP POLICY IF EXISTS "notifs_own" ON public.notifications;
 CREATE POLICY "notifs_own" ON public.notifications
   FOR ALL USING (auth.uid() = user_id);
 
+
+GRANT SELECT ON public.users TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.users TO service_role;
+GRANT SELECT ON public.educator_students TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.educator_students TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.educator_students TO service_role;
+GRANT SELECT ON public.student_grades TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.student_grades TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.student_grades TO service_role;
+GRANT SELECT ON public.student_roster TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.student_roster TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.student_roster TO service_role;
+GRANT SELECT ON public.generation_requests TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.generation_requests TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.generation_requests TO service_role;
+GRANT SELECT ON public.questions TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.questions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.questions TO service_role;
+GRANT SELECT ON public.tests TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tests TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tests TO service_role;
+GRANT SELECT ON public.test_assignments TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.test_assignments TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.test_assignments TO service_role;
+GRANT SELECT ON public.test_attempts TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.test_attempts TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.test_attempts TO service_role;
+GRANT SELECT ON public.notifications TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.notifications TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.notifications TO service_role;

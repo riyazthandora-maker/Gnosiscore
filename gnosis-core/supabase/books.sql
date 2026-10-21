@@ -81,3 +81,10 @@ CREATE POLICY "book_collabs_owner_all" ON public.book_collaborators
 
 CREATE POLICY "book_collabs_self_read" ON public.book_collaborators
   FOR SELECT USING (user_id = auth.uid());
+
+GRANT SELECT ON public.books TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.books TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.books TO service_role;
+GRANT SELECT ON public.book_collaborators TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.book_collaborators TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.book_collaborators TO service_role;

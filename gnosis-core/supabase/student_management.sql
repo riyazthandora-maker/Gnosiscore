@@ -52,3 +52,10 @@ CREATE INDEX IF NOT EXISTS idx_student_roster_invite_token
 -- Index for fast email lookups during auto-link on registration
 CREATE INDEX IF NOT EXISTS idx_student_roster_email
   ON public.student_roster(email);
+
+GRANT SELECT ON public.student_grades TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.student_grades TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.student_grades TO service_role;
+GRANT SELECT ON public.student_roster TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.student_roster TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.student_roster TO service_role;

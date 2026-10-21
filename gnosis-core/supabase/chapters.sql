@@ -36,3 +36,7 @@ ALTER TABLE IF EXISTS public.users
   ADD COLUMN IF NOT EXISTS doc_size_limit_bytes BIGINT,
   ADD COLUMN IF NOT EXISTS max_docs_per_chapter INT,
   ADD COLUMN IF NOT EXISTS monthly_upload_limit INT;
+
+GRANT SELECT ON public.chapters TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.chapters TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.chapters TO service_role;

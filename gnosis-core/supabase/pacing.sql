@@ -78,3 +78,10 @@ DO $$ BEGIN
 END $$;
 
 CREATE INDEX IF NOT EXISTS idx_pacing_milestones_plan_id ON public.pacing_milestones(plan_id);
+
+GRANT SELECT ON public.pacing_plans TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pacing_plans TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pacing_plans TO service_role;
+GRANT SELECT ON public.pacing_milestones TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pacing_milestones TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pacing_milestones TO service_role;

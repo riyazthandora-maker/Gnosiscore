@@ -151,3 +151,10 @@ RETURNS TABLE (
       LEAST(pm.week_in_month * 7, 28)
     ) BETWEEN CURRENT_DATE AND (CURRENT_DATE + p_days_ahead);
 $$;
+
+GRANT SELECT ON public.pacing_events TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pacing_events TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pacing_events TO service_role;
+GRANT SELECT ON public.pacing_suggestions TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pacing_suggestions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.pacing_suggestions TO service_role;

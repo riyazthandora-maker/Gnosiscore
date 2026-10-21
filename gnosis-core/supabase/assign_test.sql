@@ -93,3 +93,10 @@ CREATE POLICY "es_educator_read" ON exam_sessions
         AND a.assigned_by = auth.uid()
     )
   );
+
+GRANT SELECT ON public.exam_assignments TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.exam_assignments TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.exam_assignments TO service_role;
+GRANT SELECT ON public.exam_sessions TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.exam_sessions TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.exam_sessions TO service_role;

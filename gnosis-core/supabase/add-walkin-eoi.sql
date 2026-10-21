@@ -20,6 +20,11 @@ ALTER TABLE public.diagnostic_reports
   ADD COLUMN IF NOT EXISTS report_type TEXT NOT NULL DEFAULT 'diagnostic',
   ADD COLUMN IF NOT EXISTS session_id UUID;
 
+-- Explicit grants required for new tables after 2026-10-30 (Supabase auto-grant removal)
+GRANT SELECT ON public.diagnostic_reports TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.diagnostic_reports TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.diagnostic_reports TO service_role;
+
 -- RLS
 ALTER TABLE public.diagnostic_reports ENABLE ROW LEVEL SECURITY;
 
