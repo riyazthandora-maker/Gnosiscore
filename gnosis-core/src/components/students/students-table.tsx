@@ -5,6 +5,10 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { RosterEntry } from "@/types"
 
+function fmtDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" })
+}
+
 const STATUS_STYLE: Record<string, string> = {
   active: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
   invited: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
@@ -44,13 +48,23 @@ export function StudentsTable({ entries, onEdit, onDelete, onResendInvite }: Pro
             <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">Phone</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Grade</th>
             <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
+            <th className="px-4 py-3 text-left font-medium text-muted-foreground hidden xl:table-cell">EOI</th>
             <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">
           {entries.map((entry) => (
             <tr key={entry.id} className="hover:bg-muted/30 transition-colors">
-              <td className="px-4 py-3 font-medium">{entry.name}</td>
+              <td className="px-4 py-3 font-medium">
+                <div className="flex items-center gap-2">
+                  {entry.name}
+                  {entry.is_walkin && (
+                    <span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-600 dark:text-violet-400">
+                      Walk-in
+                    </span>
+                  )}
+                </div>
+              </td>
               <td className="px-4 py-3 text-muted-foreground">
                 <a href={`mailto:${entry.email}`} className="flex items-center gap-1.5 hover:text-foreground min-w-0">
                   <Mail className="size-3.5 shrink-0" />
@@ -74,6 +88,15 @@ export function StudentsTable({ entries, onEdit, onDelete, onResendInvite }: Pro
                 <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium", STATUS_STYLE[entry.status])}>
                   {STATUS_LABEL[entry.status]}
                 </span>
+              </td>
+              <td className="px-4 py-3 text-muted-foreground hidden xl:table-cell">
+                {entry.eoi_at ? (
+                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                    {fmtDate(entry.eoi_at)}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground/40">—</span>
+                )}
               </td>
               <td className="px-4 py-3">
                 <div className="flex items-center justify-end gap-1">

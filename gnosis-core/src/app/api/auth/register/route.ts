@@ -4,6 +4,28 @@ import { checkRateLimit } from "@/lib/rate-limit"
 import { headers } from "next/headers"
 import { sendAdminNewRegistrationAlert } from "@/lib/email/send-admin-alert"
 import { verifyOtpToken } from "@/lib/otp-token"
+import { sendStudentWelcomeEmail } from "@/lib/email/send-student-welcome"
+import { sendWalkInAdminAlert } from "@/lib/email/send-walkin-admin-alert"
+
+const ADMIN_TEACHER_EMAIL = "riyazkalla@gmail.com"
+
+// Grade 1-4 → Primary, 5-7 → Upper Primary, 8-10 → High School, 11-12 → UG, rest → null
+function gradeToTier(grade: string): string | null {
+  const match = grade.match(/grade\s*(\d+)/i)
+  if (match) {
+    const n = parseInt(match[1], 10)
+    if (n <= 4) return "Primary"
+    if (n <= 7) return "Upper Primary"
+    if (n <= 10) return "High School"
+    return "UG"
+  }
+  return null
+}
+
+function isHigherEducation(grade: string): boolean {
+  const g = grade.toLowerCase()
+  return g === "degree" || g === "master" || g === "professional"
+}
 
 const IS_DEV = process.env.NODE_ENV === "development" ||
   !process.env.BACKEND_API_URL ||
@@ -139,7 +161,27 @@ export async function POST(request: Request) {
       )
     }
 
-    return NextResponse.json({ success: true, held: await isHeldStudent(supabase, isStudent, email) })
+    const devHeld = await isHeldStudent(supabase, isStudent, email)
+
+    if (!createErr && isStudent && devHeld) {
+      const walkInResult = await handleWalkInStudent(
+        supabase,
+        email.trim().toLowerCase(),
+        full_name ?? "",
+        asText(grade),
+      ).catch((err: unknown) => {
+        console.error("[register] walk-in handling failed:", (err as Error)?.message)
+        return null
+      })
+      return NextResponse.json({
+        success: true,
+        held: false,
+        walkin: true,
+        higherEd: walkInResult?.higherEd ?? false,
+      })
+    }
+
+    return NextResponse.json({ success: true, held: devHeld })
   }
 
   // Production — create confirmed user with their chosen password (no SMTP needed)
@@ -215,7 +257,28 @@ export async function POST(request: Request) {
     )
   }
 
-  return NextResponse.json({ success: true, held: await isHeldStudent(supabase, isStudent, email) })
+  const held = await isHeldStudent(supabase, isStudent, email)
+
+  // Walk-in student: not linked via invite → auto-assign to admin teacher
+  if (!createErr && isStudent && held) {
+    const walkInResult = await handleWalkInStudent(
+      supabase,
+      email.trim().toLowerCase(),
+      full_name ?? "",
+      asText(grade),
+    ).catch((err: unknown) => {
+      console.error("[register] walk-in handling failed:", (err as Error)?.message)
+      return null
+    })
+    return NextResponse.json({
+      success: true,
+      held: false,
+      walkin: true,
+      higherEd: walkInResult?.higherEd ?? false,
+    })
+  }
+
+  return NextResponse.json({ success: true, held })
 }
 
 function asText(value: unknown): string {
@@ -309,4 +372,152 @@ async function ensureProfileRow(
     )
 
   if (error) console.error("[register] profile row upsert failed:", error.message)
+}
+
+async function handleWalkInStudent(
+  adminDb: ReturnType<typeof createAdminClient>,
+  studentEmail: string,
+  studentFullName: string,
+  studentGrade: string,
+): Promise<{ higherEd: boolean } | null> {
+  const higherEd = isHigherEducation(studentGrade)
+  const tier = gradeToTier(studentGrade)
+
+  // Find the fixed admin teacher
+  const { data: teacher } = await adminDb
+    .from("users")
+    .select("id, email")
+    .eq("email", ADMIN_TEACHER_EMAIL)
+    .single()
+
+  if (!teacher?.id) {
+    console.error("[walk-in] admin teacher not found:", ADMIN_TEACHER_EMAIL)
+    return null
+  }
+
+  // Find student user record
+  const { data: student } = await adminDb
+    .from("users")
+    .select("id")
+    .eq("email", studentEmail)
+    .single()
+
+  if (!student?.id) {
+    console.error("[walk-in] student user not found:", studentEmail)
+    return null
+  }
+
+  // Create walk-in roster entry
+  const { error: rosterErr } = await adminDb
+    .from("student_roster")
+    .insert({
+      teacher_id: teacher.id,
+      student_user_id: student.id,
+      name: studentFullName || studentEmail,
+      email: studentEmail,
+      status: "active",
+      is_walkin: true,
+      grade_id: null,
+      invite_token: null,
+    })
+
+  if (rosterErr) {
+    console.error("[walk-in] roster insert failed:", rosterErr.message)
+  }
+
+  // Approve the student account
+  await adminDb
+    .from("users")
+    .update({ account_status: "approved" })
+    .eq("id", student.id)
+
+  if (higherEd) {
+    sendWalkInAdminAlert({
+      teacherEmail: ADMIN_TEACHER_EMAIL,
+      studentName: studentFullName || studentEmail,
+      studentEmail,
+      gradeLevel: studentGrade,
+    }).catch((err: unknown) => console.error("[walk-in] higher-ed alert failed:", (err as Error)?.message))
+    return { higherEd: true }
+  }
+
+  if (!tier) return { higherEd: false }
+
+  // Find a grade-matched talent exam paper from the admin teacher
+  const { data: papers } = await adminDb
+    .from("exam_papers")
+    .select("id, title")
+    .eq("teacher_id", teacher.id)
+    .ilike("title", `%${tier}%`)
+    .limit(1)
+
+  const paper = papers?.[0]
+  if (!paper) {
+    console.error("[walk-in] no talent exam found for tier:", tier)
+    return { higherEd: false }
+  }
+
+  // Create an assignment for the student
+  const { data: assignment, error: assignErr } = await adminDb
+    .from("exam_assignments")
+    .insert({
+      paper_id: paper.id,
+      student_roster_id: (await adminDb
+        .from("student_roster")
+        .select("id")
+        .eq("student_user_id", student.id)
+        .eq("is_walkin", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()
+      ).data?.id,
+      assigned_by: teacher.id,
+      duration_minutes: 5,
+      max_attempts: 1,
+      randomize_questions: false,
+      shuffle_answers: false,
+      allow_backtrack: true,
+      mandatory_answering: false,
+      flag_for_review: false,
+      browser_lockdown: false,
+      disable_copy_paste: false,
+      tab_switch_warnings: false,
+      tab_switch_limit: 0,
+      release_results_immediately: true,
+      show_explanations: false,
+      threshold_excellent: 90,
+      threshold_distinction: 75,
+      threshold_pass: 50,
+    })
+    .select("id")
+    .single()
+
+  if (assignErr || !assignment) {
+    console.error("[walk-in] assignment insert failed:", assignErr?.message)
+    return { higherEd: false }
+  }
+
+  // Generate magic link → /auth/callback?next=/student/exam/<assignmentId>
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"
+  const redirectTo = `${appUrl}/auth/callback?next=/student/exam/${assignment.id}`
+
+  const { data: linkData, error: linkErr } = await adminDb.auth.admin.generateLink({
+    type: "magiclink",
+    email: studentEmail,
+    options: { redirectTo },
+  })
+
+  if (linkErr || !linkData?.properties?.action_link) {
+    console.error("[walk-in] magic link generation failed:", linkErr?.message)
+    return { higherEd: false }
+  }
+
+  sendStudentWelcomeEmail({
+    to: studentEmail,
+    fullName: studentFullName || studentEmail,
+    grade: studentGrade,
+    magicLink: linkData.properties.action_link,
+  }).catch((err: unknown) => console.error("[walk-in] welcome email failed:", (err as Error)?.message))
+
+  return { higherEd: false }
 }

@@ -39,7 +39,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("student_roster")
-    .select("id, teacher_id, student_user_id, name, email, phone, grade_id, grade:student_grades(id, name), status, invite_token, invite_expires_at, created_at, updated_at")
+    .select("id, teacher_id, student_user_id, name, email, phone, grade_id, grade:student_grades(id, name), status, invite_token, invite_expires_at, is_walkin, eoi_at, created_at, updated_at")
     .eq("teacher_id", user.id)
     .order("created_at", { ascending: false })
 

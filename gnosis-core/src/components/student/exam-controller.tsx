@@ -144,7 +144,7 @@ export function ExamController({
       showExplanations={config.show_explanations}
       questions={questions}
       answers={results?.answers ?? {}}
-      onDone={() => router.push("/student")}
+      onDone={() => router.push(`/student/progress?session=${sessionId}`)}
     />
   )
 }

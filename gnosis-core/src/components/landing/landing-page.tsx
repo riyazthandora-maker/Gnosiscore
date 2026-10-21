@@ -104,6 +104,15 @@ export function LandingPage() {
               <Button variant="outline" size="lg" className="px-6">{c.hero.ctaParent}</Button>
             </a>
           </div>
+          <div className="mt-6">
+            <Link href="/register?role=student">
+              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
+                <BrainCircuit className="size-4" />
+                Let&apos;s find what I want to become
+                <ArrowRight className={`size-3.5 ${arrow}`} />
+              </Button>
+            </Link>
+          </div>
         </section>
 
         {/* Curriculum trust bar */}

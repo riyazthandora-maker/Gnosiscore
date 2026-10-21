@@ -173,6 +173,8 @@ export interface RosterEntry {
   status: RosterStatus
   invite_token: string | null
   invite_expires_at: string | null
+  is_walkin: boolean
+  eoi_at: string | null
   created_at: string
   updated_at: string
 }

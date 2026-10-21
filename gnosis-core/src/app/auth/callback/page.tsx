@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { roleHomePath } from "@/types"
 import type { UserRole } from "@/types"
@@ -9,11 +9,17 @@ import { Loader2 } from "lucide-react"
 
 export default function AuthCallbackPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
 
   useEffect(() => {
     const supabase = createClient()
+    const nextPath = searchParams.get("next")
 
     async function redirect(userId: string, role: UserRole) {
+      if (nextPath) {
+        router.replace(nextPath)
+        return
+      }
       if (role === "educator_parent") {
         // Check if account is still pending — new registrations start as pending
         const { data } = await supabase
@@ -46,7 +52,7 @@ export default function AuthCallbackPage() {
     })
 
     return () => subscription.unsubscribe()
-  }, [router])
+  }, [router, searchParams])
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-3">
