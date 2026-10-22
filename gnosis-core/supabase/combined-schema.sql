@@ -551,8 +551,7 @@ CREATE TABLE IF NOT EXISTS public.pacing_milestones (
   node_id             TEXT    NOT NULL,
   node_level          TEXT    NOT NULL CHECK (node_level IN ('chapter','section','details')),
   node_title          TEXT    NOT NULL,
-  month               INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
-  week_in_month       INTEGER NOT NULL CHECK (week_in_month BETWEEN 1 AND 4),
+  scheduled_date      DATE,
   topic_notes         TEXT,
   milestone_type      milestone_type NOT NULL DEFAULT 'teach',
   auto_exam_paper_id  UUID REFERENCES public.exam_papers(id) ON DELETE SET NULL,
@@ -560,6 +559,10 @@ CREATE TABLE IF NOT EXISTS public.pacing_milestones (
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(plan_id, node_id)
 );
+-- Migrate existing tables: replace month+week_in_month with scheduled_date
+ALTER TABLE IF EXISTS public.pacing_milestones ADD COLUMN IF NOT EXISTS scheduled_date     DATE;
+ALTER TABLE IF EXISTS public.pacing_milestones DROP COLUMN IF EXISTS month;
+ALTER TABLE IF EXISTS public.pacing_milestones DROP COLUMN IF EXISTS week_in_month;
 ALTER TABLE IF EXISTS public.pacing_milestones ADD COLUMN IF NOT EXISTS milestone_type     milestone_type NOT NULL DEFAULT 'teach';
 ALTER TABLE IF EXISTS public.pacing_milestones ADD COLUMN IF NOT EXISTS auto_exam_paper_id UUID REFERENCES public.exam_papers(id) ON DELETE SET NULL;
 ALTER TABLE IF EXISTS public.pacing_milestones ADD COLUMN IF NOT EXISTS auto_exam_status   TEXT CHECK (auto_exam_status IN ('pending_review', 'approved', 'assigned'));
@@ -693,42 +696,27 @@ $$;
 
 DROP FUNCTION IF EXISTS public.get_pending_auto_assess_milestones(integer);
 CREATE OR REPLACE FUNCTION public.get_pending_auto_assess_milestones(
-  p_days_ahead INTEGER DEFAULT 6
+  p_days_ahead INTEGER DEFAULT 7
 )
 RETURNS TABLE (
-  milestone_id          UUID,
-  plan_id               UUID,
-  teacher_id            UUID,
-  grade_id              UUID,
-  book_id               UUID,
-  start_month           INTEGER,
-  academic_year         TEXT,
-  node_id               TEXT,
-  node_title            TEXT,
-  month                 INTEGER,
-  week_in_month         INTEGER,
-  difficulty_bands      JSONB,
-  auto_question_count   INTEGER,
-  auto_duration_minutes INTEGER
-) LANGUAGE sql SECURITY DEFINER STABLE AS $$
+  milestone_id   UUID,
+  plan_id        UUID,
+  node_id        TEXT,
+  node_title     TEXT,
+  scheduled_date DATE
+) LANGUAGE sql STABLE AS $$
   SELECT
-    pm.id, pp.id, pp.teacher_id, pp.grade_id, pp.book_id,
-    pp.start_month, pp.academic_year,
-    pm.node_id, pm.node_title, pm.month, pm.week_in_month,
-    pp.difficulty_bands, pp.auto_question_count, pp.auto_duration_minutes
+    pm.id           AS milestone_id,
+    pm.plan_id      AS plan_id,
+    pm.node_id      AS node_id,
+    pm.node_title   AS node_title,
+    pm.scheduled_date
   FROM public.pacing_milestones pm
   JOIN public.pacing_plans pp ON pp.id = pm.plan_id
-  WHERE pm.milestone_type = 'assess'
-    AND pm.auto_exam_paper_id IS NULL
+  WHERE pm.auto_exam_paper_id IS NULL
     AND pp.auto_assess_enabled = true
-    AND make_date(
-      CASE WHEN pm.month >= pp.start_month
-        THEN SPLIT_PART(pp.academic_year, '-', 1)::INT
-        ELSE SPLIT_PART(pp.academic_year, '-', 2)::INT
-      END,
-      pm.month,
-      LEAST(pm.week_in_month * 7, 28)
-    ) BETWEEN CURRENT_DATE AND (CURRENT_DATE + p_days_ahead);
+    AND pm.scheduled_date IS NOT NULL
+    AND pm.scheduled_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + p_days_ahead);
 $$;
 
 
