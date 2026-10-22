@@ -1,13 +1,13 @@
 "use client"
 
-import { useEffect } from "react"
+import { Suspense, useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
 import { roleHomePath } from "@/types"
 import type { UserRole } from "@/types"
 import { Loader2 } from "lucide-react"
 
-export default function AuthCallbackPage() {
+function AuthCallbackInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
 
@@ -59,5 +59,20 @@ export default function AuthCallbackPage() {
       <Loader2 className="size-8 animate-spin text-muted-foreground" />
       <p className="text-sm text-muted-foreground">Signing you in…</p>
     </div>
+  )
+}
+
+export default function AuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-col items-center justify-center gap-3">
+          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">Signing you in…</p>
+        </div>
+      }
+    >
+      <AuthCallbackInner />
+    </Suspense>
   )
 }
