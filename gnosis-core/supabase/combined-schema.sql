@@ -691,6 +691,7 @@ RETURNS VOID LANGUAGE SQL SECURITY DEFINER SET search_path = public AS $$
   UPDATE public.users SET tokens_used = 0 WHERE role = 'educator_parent';
 $$;
 
+DROP FUNCTION IF EXISTS public.get_pending_auto_assess_milestones(integer);
 CREATE OR REPLACE FUNCTION public.get_pending_auto_assess_milestones(
   p_days_ahead INTEGER DEFAULT 6
 )
